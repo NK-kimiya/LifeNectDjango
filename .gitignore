@@ -1,0 +1,27 @@
+# Python キャッシュ
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# 仮想環境
+venv/
+.venv/
+
+# Django 関連
+*.log
+*.pot
+*.pyc
+db.sqlite3
+media/
+staticfiles/
+
+# IDE / エディタ関連
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 環境設定ファイル
+.env
