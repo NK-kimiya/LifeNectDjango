@@ -4,6 +4,11 @@ from rest_framework.response import Response
 from pinecone import Pinecone, ServerlessSpec
 from openai import OpenAI
 from django.conf import settings
+from rest_framework.permissions import IsAdminUser
+from .models import Tag
+from .serializers import TagSerializer
+from rest_framework import viewsets
+from .exceptions import custom_handle_exception  # 追加
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -45,3 +50,15 @@ def me(request):
         "username": user.username,
         "email": user.email,
     })
+    
+class TagViewSet(viewsets.ModelViewSet):
+    queryset = Tag.objects.all()
+    serializer_class = TagSerializer
+    permission_classes = [IsAdminUser]  # 管理者のみ許可
+
+    def handle_exception(self, exc):
+        # 共通の例外処理を利用
+        response = custom_handle_exception(exc, context=self)
+        if response:
+            return response
+        return super().handle_exception(exc)
