@@ -14,3 +14,14 @@ class UploadedFile(models.Model):
 
     def __str__(self):
         return self.file.url if self.file else "No file"
+
+class BlogArticle(models.Model):
+    title = models.CharField(max_length=200)
+    eyecatch = models.URLField(blank=True, null=True)  # アイキャッチ画像URL
+    body = models.TextField()
+    tags = models.ManyToManyField(Tag, related_name="articles", blank=True)  # 複数タグ
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.title

@@ -5,10 +5,11 @@ from pinecone import Pinecone, ServerlessSpec
 from openai import OpenAI
 from django.conf import settings
 from rest_framework.permissions import IsAdminUser
-from .models import Tag,UploadedFile
-from .serializers import TagSerializer,UploadedFileSerializer
+from .models import Tag,UploadedFile,BlogArticle
+from .serializers import TagSerializer,UploadedFileSerializer,BlogArticleSerializer
 from rest_framework import viewsets,permissions
 from .exceptions import custom_handle_exception  # 追加
+from .permissions import IsAdminOrReadOnly
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -62,18 +63,6 @@ class TagViewSet(viewsets.ModelViewSet):
         if response:
             return response
         return super().handle_exception(exc)
-    
-
-class IsAdminOrReadOnly(permissions.BasePermission):
-    """
-    管理者のみ作成・削除できる。それ以外は読み取りのみ許可
-    """
-    def has_permission(self, request, view):
-        # 取得(GET, HEAD, OPTIONS) は誰でもOK
-        if request.method in permissions.SAFE_METHODS:
-            return True
-        # 作成・削除などは管理者のみ
-        return request.user and request.user.is_staff
 
 class UploadedFileViewSet(viewsets.ModelViewSet):
     queryset = UploadedFile.objects.all()
@@ -86,3 +75,9 @@ class UploadedFileViewSet(viewsets.ModelViewSet):
         if response:
             return response
         return super().handle_exception(exc)
+    
+
+class BlogArticleViewSet(viewsets.ModelViewSet):
+    queryset = BlogArticle.objects.all().order_by("-created_at")
+    serializer_class = BlogArticleSerializer
+    permission_classes = [IsAdminOrReadOnly]
