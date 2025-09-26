@@ -73,6 +73,7 @@ REST_FRAMEWORK = {
     # "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.AllowAny",)
     # 運用寄りはIsAuthenticated
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    "EXCEPTION_HANDLER": "myapp.exceptions.custom_handle_exception",
 }
 
 ROOT_URLCONF = 'myproject.urls'
