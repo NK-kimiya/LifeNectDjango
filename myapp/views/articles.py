@@ -69,6 +69,47 @@ class BlogArticleViewSet(BaseModelViewSet):
         # 🔹 DBから記事を削除
         self.perform_destroy(instance)
         return Response(status=status.HTTP_204_NO_CONTENT)
+    
+    def update(self, request, *args, **kwargs):
+        # 1. 更新対象の記事を取得
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        article_id = serializer.instance.id
+        body = serializer.validated_data.get("body", "")
+
+        # 2. 本文をクリーニング
+        text_only = BeautifulSoup(body, "html.parser").get_text()
+        cleaned_text = re.sub(r"\s+", " ", text_only).strip()
+
+        # 3. Pinecone クライアント準備
+        client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        pc = Pinecone(api_key=settings.PINECONE_API_KEY)
+        index = pc.Index("my-index")
+
+        # 4. 既存ベクトル削除（記事IDで始まるものを全部消す）
+        # namespace を使っていない場合は、チャンク数を保存しておいて range で列挙する方が安全です
+        # 簡易的には delete(filter=...) を使う
+        index.delete(filter={"article_id": str(article_id)})
+
+        # 5. チャンク化
+        chunks = chunk_text(cleaned_text, chunk_size=200, overlap=50)
+
+        # 6. Embedding を作成 & Pinecone に保存
+        vectors = []
+        for i, chunk in enumerate(chunks):
+            emb = client.embeddings.create(input=chunk, model="text-embedding-3-small")
+            vectors.append({
+                "id": f"{article_id}-{i}",
+                "values": emb.data[0].embedding,
+                "metadata": {"text": chunk, "article_id": str(article_id)}
+            })
+        index.upsert(vectors=vectors)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def get_serializer_class(self):
         if self.action in ["create", "update", "partial_update"]:
