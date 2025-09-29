@@ -10,12 +10,15 @@ from django.conf import settings
 from pinecone import Pinecone
 from rest_framework.response import Response
 from rest_framework import status
-
+from rest_framework.generics import ListAPIView
+from rest_framework.filters import SearchFilter
+from rest_framework.permissions import AllowAny
 from ..serializers import (
     TagSerializer,
     UploadedFileReadSerializer, UploadedFileWriteSerializer,
     BlogArticleReadSerializer, BlogArticleWriteSerializer,
 )
+from myapp.serializers.article import BlogArticleSerializer
 
 
 # BlogArticleViewSet に追加
@@ -136,3 +139,18 @@ def chunk_text(text: str, chunk_size: int = 200, overlap: int = 50) -> list[str]
         start = end - overlap  # overlap 分戻って次のチャンク開始
 
     return chunks
+
+
+class BlogArticleFilterView(ListAPIView):
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+    serializer_class = BlogArticleSerializer
+    filter_backends = [SearchFilter]
+    search_fields = ["title", "body"]  # ← キーワード検索対象
+
+    def get_queryset(self):
+        queryset = BlogArticle.objects.all()
+        tag = self.request.query_params.get("tag")
+        if tag:
+            queryset = queryset.filter(tags__name=tag)
+        return queryset

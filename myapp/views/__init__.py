@@ -1,6 +1,6 @@
 from .me import me
 from .tags import TagViewSet
-from .articles import BlogArticleViewSet
+from .articles import BlogArticleViewSet,BlogArticleFilterView
 from .files import UploadedFileViewSet
 from .rag_answer import RagAnswer
 
@@ -10,4 +10,5 @@ __all__ = [
     "BlogArticleViewSet",
     "UploadedFileViewSet",
     "RagAnswer",
+    "BlogArticleFilterView",
 ]
