@@ -36,3 +36,11 @@ class BlogArticleWriteSerializer(serializers.ModelSerializer):
         if tags is not None:
             instance.tags.set(tags)
         return instance
+    
+
+class BlogArticleSerializer(serializers.ModelSerializer):
+    tags = serializers.StringRelatedField(many=True)
+
+    class Meta:
+        model = BlogArticle
+        fields = ["id", "title", "eyecatch", "body", "tags", "created_at"]
