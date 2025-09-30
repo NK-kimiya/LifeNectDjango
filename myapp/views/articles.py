@@ -19,39 +19,71 @@ from ..serializers import (
     BlogArticleReadSerializer, BlogArticleWriteSerializer,
 )
 from myapp.serializers.article import BlogArticleSerializer
-
+from openai import AuthenticationError, RateLimitError, APIError, APIError
+from pinecone.core.client.exceptions import UnauthorizedException, PineconeApiException
 
 # BlogArticleViewSet に追加
 class BlogArticleViewSet(BaseModelViewSet):
     queryset = BlogArticle.objects.all().order_by("-created_at")
     permission_classes = [IsAdminOrReadOnly]
     
-    
     def create(self, request, *args, **kwargs):
        body = request.data.get("body", "")
+       
+       if not body:
+            return Response(
+                {"detail": "入力内容が空です。メッセージを入力してください。"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
        text_only = BeautifulSoup(body, "html.parser").get_text()
        cleaned_text = re.sub(r"\s+", " ", text_only).strip()
        
        response = super().create(request, *args, **kwargs)
        article_id = response.data.get("id")
-       
-       chunks = chunk_text(cleaned_text, chunk_size=200, overlap=50)
-       client = OpenAI(api_key=settings.OPENAI_API_KEY)
-       pc = Pinecone(api_key=settings.PINECONE_API_KEY)
-       index = pc.Index("my-index")
-       
-       for i, chunk in enumerate(chunks):
-            emb = client.embeddings.create(
-                input=chunk,
-                model="text-embedding-3-small"
-            )
-            vector = emb.data[0].embedding
+       try:
+        chunks = chunk_text(cleaned_text, chunk_size=200, overlap=50)
+        client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        pc = Pinecone(api_key=settings.PINECONE_API_KEY)
+        index = pc.Index("my-index")
+        
+        for i, chunk in enumerate(chunks):
+                emb = client.embeddings.create(
+                    input=chunk,
+                    model="text-embedding-3-small"
+                )
+                vector = emb.data[0].embedding
 
-            index.upsert(vectors=[{
-                "id": f"{article_id}-{i}",  # ← "記事ID-チャンク番号"
-                "values": vector,
-                "metadata": {"text": chunk}
-            }])
+                index.upsert(vectors=[{
+                    "id": f"{article_id}-{i}",  # ← "記事ID-チャンク番号"
+                    "values": vector,
+                    "metadata": {"text": chunk}
+                }])
+       except AuthenticationError:
+        return Response(
+            {"detail": "現在AIサービスに接続できません。時間をおいて再度お試しください。"},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+       except RateLimitError:
+        return Response(
+            {"detail": "現在、全体の利用量が上限に達したため処理できません。"
+                    "復旧対応を行っておりますので、しばらくお待ちください。"},
+            status=status.HTTP_429_TOO_MANY_REQUESTS
+        )
+       except UnauthorizedException:  # Pinecone 認証エラー
+        return Response(
+            {"detail": "通信エラーが発生しました。時間をおいて再度お試しください。"},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+       except PineconeApiException:  # ← 修正: ApiException → PineconeApiException
+        return Response(
+            {"detail": "検索サービスで内部エラーが発生しました。改善しない場合はお問い合わせください。"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        ) 
+       except APIError:
+        return Response(
+            {"detail": "AIサービス処理中にエラーが発生しました。時間をおいて再度お試しください。"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
        return response
    
@@ -61,13 +93,15 @@ class BlogArticleViewSet(BaseModelViewSet):
 
         # Pinecone クライアント初期化
         client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        pc = Pinecone(api_key=settings.PINECONE_API_KEY)
-        index = pc.Index("my-index")
+        try:
+            pc = Pinecone(api_key=settings.PINECONE_API_KEY)
+            index = pc.Index("my-index")
 
-        # 🔹 まず対象記事に対応する全チャンクを削除する
-        # ここでは便宜上 0〜99 までを削除対象とする（必要に応じて上限を決める）
-        ids_to_delete = [f"{article_id}-{i}" for i in range(100)]
-        index.delete(ids=ids_to_delete)
+            # 🔹 まず対象記事に対応する全チャンクを削除する
+            # ここでは便宜上 0〜99 までを削除対象とする（必要に応じて上限を決める）
+            index.delete(filter={"article_id": str(article_id)})
+        except Exception as e:
+            return Response({"detail": f"予期しないエラーが発生しました。改善しない場合はお問い合わせください。"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # 🔹 DBから記事を削除
         self.perform_destroy(instance)
@@ -83,34 +117,38 @@ class BlogArticleViewSet(BaseModelViewSet):
 
         article_id = serializer.instance.id
         body = serializer.validated_data.get("body", "")
-
+        if not body:
+            return Response({"detail": "body が空です"}, status=status.HTTP_400_BAD_REQUEST)
         # 2. 本文をクリーニング
         text_only = BeautifulSoup(body, "html.parser").get_text()
         cleaned_text = re.sub(r"\s+", " ", text_only).strip()
 
         # 3. Pinecone クライアント準備
-        client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        pc = Pinecone(api_key=settings.PINECONE_API_KEY)
-        index = pc.Index("my-index")
+        try:
+            client = OpenAI(api_key=settings.OPENAI_API_KEY)
+            pc = Pinecone(api_key=settings.PINECONE_API_KEY)
+            index = pc.Index("my-index")
 
-        # 4. 既存ベクトル削除（記事IDで始まるものを全部消す）
-        # namespace を使っていない場合は、チャンク数を保存しておいて range で列挙する方が安全です
-        # 簡易的には delete(filter=...) を使う
-        index.delete(filter={"article_id": str(article_id)})
+            # 4. 既存ベクトル削除（記事IDで始まるものを全部消す）
+            # namespace を使っていない場合は、チャンク数を保存しておいて range で列挙する方が安全です
+            # 簡易的には delete(filter=...) を使う
+            index.delete(filter={"article_id": str(article_id)})
 
-        # 5. チャンク化
-        chunks = chunk_text(cleaned_text, chunk_size=200, overlap=50)
+            # 5. チャンク化
+            chunks = chunk_text(cleaned_text, chunk_size=200, overlap=50)
 
-        # 6. Embedding を作成 & Pinecone に保存
-        vectors = []
-        for i, chunk in enumerate(chunks):
-            emb = client.embeddings.create(input=chunk, model="text-embedding-3-small")
-            vectors.append({
-                "id": f"{article_id}-{i}",
-                "values": emb.data[0].embedding,
-                "metadata": {"text": chunk, "article_id": str(article_id)}
-            })
-        index.upsert(vectors=vectors)
+            # 6. Embedding を作成 & Pinecone に保存
+            vectors = []
+            for i, chunk in enumerate(chunks):
+                emb = client.embeddings.create(input=chunk, model="text-embedding-3-small")
+                vectors.append({
+                    "id": f"{article_id}-{i}",
+                    "values": emb.data[0].embedding,
+                    "metadata": {"text": chunk, "article_id": str(article_id)}
+                })
+            index.upsert(vectors=vectors)
+        except Exception as e:  # 🔽 修正: 例外キャッチ
+            return Response({"detail": f"予期しないエラーが発生しました。改善しない場合はお問い合わせください。"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
 

@@ -24,4 +24,11 @@ def custom_handle_exception(exc, context=None):
             {"message": "入力内容に誤りがあるか、既に作成されているデータです。", "details": exc.detail},
             status=status.HTTP_400_BAD_REQUEST
         )
-    return None  # それ以外はデフォルト処理
+    return Response(
+        {
+            "detail": "システム内部で予期しないエラーが発生しました。時間をおいて再度お試しください。",
+            "error_type": exc.__class__.__name__,    # ← エラーの型名
+            "error_message": str(exc),               # ← エラーのメッセージ本文
+        },
+        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+    )

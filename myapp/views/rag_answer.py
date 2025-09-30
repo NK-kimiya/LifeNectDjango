@@ -4,7 +4,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 from openai import OpenAI
+from openai import AuthenticationError, RateLimitError, APIError
 import pinecone
+
+from pinecone.core.client.exceptions import UnauthorizedException, PineconeApiException 
 
 class RagAnswer(APIView):
     authentication_classes = [] 
@@ -13,28 +16,59 @@ class RagAnswer(APIView):
     def post(self, request):
         query_text = request.data.get("text", "")
         if not query_text:
-            return Response({"error": "text is required"}, status=400)
+            return Response(
+                {"detail": "質問内容が入力されていません。メッセージを入力してください。"},
+                status=400
+            )
 
         # ✅ OpenAI クライアント初期化（Chat形式用）
-        client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        try:
+            client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
-        # ✅ クエリの埋め込みを作成（v3モデル）
-        embedding_response = client.embeddings.create(
-            input=query_text,
-            model="text-embedding-3-small"
-        )
-        embedding = embedding_response.data[0].embedding
-
+            # ✅ クエリの埋め込みを作成（v3モデル）
+            embedding_response = client.embeddings.create(
+                input=query_text,
+                model="text-embedding-3-small"
+            )
+            embedding = embedding_response.data[0].embedding
+        except AuthenticationError:
+            return Response(
+                {"detail": "AIサービスに接続できません。ログイン情報を確認してください。"},
+                status=401
+            )
+        except RateLimitError:
+            return Response(
+                {"detail": "現在、全体の利用量が上限に達したため処理できません。"
+                           "復旧対応を行っておりますので、しばらくお待ちください。"},
+                status=429
+            )
+        except APIError:
+            return Response(
+                {"detail": "AIサービス利用中にエラーが発生しました。時間をおいて再度お試しください。"},
+                status=500
+            )
         # ✅ Pinecone 初期化 & インデックス取得
-        pc = pinecone.Pinecone(api_key=settings.PINECONE_API_KEY)
-        index = pc.Index("my-index")
+        try:
+            pc = pinecone.Pinecone(api_key=settings.PINECONE_API_KEY)
+            index = pc.Index("my-index")
 
-        # ✅ Pinecone検索 & スコアフィルタ
-        query_result = index.query(
-            vector=embedding,
-            top_k=3,
-            include_metadata=True
-        )
+            # ✅ Pinecone検索 & スコアフィルタ
+            query_result = index.query(
+                vector=embedding,
+                top_k=3,
+                include_metadata=True
+            )
+        
+        except UnauthorizedException:
+            return Response(
+                {"detail": "検索サービスに接続できませんでした。再度お試しください。"},
+                status=401
+            )
+        except PineconeApiException:  # ← 修正
+            return Response(
+                {"detail": "検索サービスで内部エラーが発生しました。時間をおいて再度お試しください。"},
+                status=500
+            )
 
         filtered_matches = query_result.matches[:3]
 
@@ -69,14 +103,37 @@ class RagAnswer(APIView):
 """
             }
         ]
-
-        # ✅ Chatモデル（gpt-3.5-turbo）で生成
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",  # ← Chat形式モデルに変更
-            messages=messages,
-            max_tokens=1000  # ← トークン数維持
-        )
-
-        answer = response.choices[0].message.content.strip()
+        
+        try:
+            # ✅ Chatモデル（gpt-3.5-turbo）で生成
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",  # ← Chat形式モデルに変更
+                messages=messages,
+                max_tokens=1000  # ← トークン数維持
+            )
+            print("OpenAI response:", response)
+        
+            answer = response.choices[0].message.content.strip()
+       
+        except AuthenticationError:
+            return Response(
+                {"detail": "AIサービスに接続できませんでした。時間をおいて再度お試しください。"},
+                status=401
+            )
+        except RateLimitError:
+            return Response(
+                {"detail": "現在、利用が集中しています。しばらくお待ちください。"},
+                status=429
+            )
+        except APIError:
+            return Response(
+                {"detail": "回答生成中にエラーが発生しました。時間をおいて再度お試しください。"},
+                status=500
+            )
+        except Exception as e:
+            return Response(
+                {"detail": f"予期しないエラーが発生しました: {str(e)}"},
+                status=500
+            )
 
         return Response({"answer": answer}, status=200)
