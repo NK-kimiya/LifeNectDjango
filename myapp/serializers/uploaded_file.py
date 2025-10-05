@@ -11,8 +11,12 @@ class UploadedFileReadSerializer(serializers.ModelSerializer):
 
     def get_file_url(self, obj):
         # CloudinaryField は obj.file が None の可能性があるので安全に参照
+        request = self.context.get("request")
         try:
-            return obj.file.url if obj.file else None
+            if obj.file:
+                # ★ request がある場合は build_absolute_uri を使う
+                return request.build_absolute_uri(obj.file.url) if request else obj.file.url
+            return None
         except Exception:
             return None
 

@@ -17,7 +17,21 @@ import environ
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
+from datetime import timedelta
 
+SIMPLE_JWT = {
+    # アクセストークンの有効期限（例: 5分）
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+
+    # リフレッシュトークンの有効期限（例: 1日）
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+
+    # リフレッシュ時に新しいトークンを発行するか
+    "ROTATE_REFRESH_TOKENS": False,
+
+    # ローテーションしたら古いトークンを無効化するか
+    "BLACKLIST_AFTER_ROTATION": True,
+}
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -163,4 +177,5 @@ CLOUDINARY_STORAGE = {
     'API_KEY': env('CLOUDINARY_API_KEY'),
     'API_SECRET': env('CLOUDINARY_API_SECRET'),
 }
+
 
