@@ -13,6 +13,7 @@ from rest_framework import status
 from rest_framework.generics import ListAPIView
 from rest_framework.filters import SearchFilter
 from rest_framework.permissions import AllowAny
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from ..serializers import (
     TagSerializer,
     UploadedFileReadSerializer, UploadedFileWriteSerializer,
@@ -24,8 +25,9 @@ from pinecone.core.client.exceptions import UnauthorizedException, PineconeApiEx
 
 # BlogArticleViewSet に追加
 class BlogArticleViewSet(BaseModelViewSet):
-    queryset = BlogArticle.objects.all().order_by("-created_at")
     permission_classes = [IsAdminOrReadOnly]
+    queryset = BlogArticle.objects.all().order_by("-created_at")
+    
     
     def create(self, request, *args, **kwargs):
        body = request.data.get("body", "")
@@ -192,3 +194,6 @@ class BlogArticleFilterView(ListAPIView):
         if tag:
             queryset = queryset.filter(tags__name=tag)
         return queryset
+    
+
+

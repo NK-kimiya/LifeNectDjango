@@ -9,7 +9,7 @@ from ..serializers import (
 )
 from rest_framework.response import Response
 from rest_framework import status
-
+from rest_framework.parsers import MultiPartParser, FormParser
 
 class UploadedFileViewSet(BaseModelViewSet):
     queryset = UploadedFile.objects.all().order_by("-uploaded_at")
@@ -37,7 +37,15 @@ class UploadedFileViewSet(BaseModelViewSet):
             )
 
         
-        return super().create(request, *args, **kwargs)
+        write_serializer = UploadedFileWriteSerializer(data=request.data)
+        if not write_serializer.is_valid():
+            # ★ 変更: ここでバリデーションエラーを返す
+            return Response(write_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        instance = write_serializer.save()
+        read_serializer = UploadedFileReadSerializer(instance, context={"request": request})
+        return Response(read_serializer.data, status=status.HTTP_201_CREATED)
+
 
 
 
