@@ -31,7 +31,7 @@ class BlogArticleViewSet(BaseModelViewSet):
     
     def create(self, request, *args, **kwargs):
        body = request.data.get("body", "")
-       
+       title = request.data.get("title", "")
        if not body:
             return Response(
                 {"detail": "入力内容が空です。メッセージを入力してください。"},
@@ -58,7 +58,7 @@ class BlogArticleViewSet(BaseModelViewSet):
                 index.upsert(vectors=[{
                     "id": f"{article_id}-{i}",  # ← "記事ID-チャンク番号"
                     "values": vector,
-                    "metadata": {"text": chunk}
+                    "metadata": {"text": chunk, "article_id": str(article_id),"title":str(title)}
                 }])
        except AuthenticationError:
         return Response(
@@ -119,6 +119,8 @@ class BlogArticleViewSet(BaseModelViewSet):
 
         article_id = serializer.instance.id
         body = serializer.validated_data.get("body", "")
+        title = serializer.validated_data.get("title", "")
+        print("記事タイトルの更新は" + title)
         if not body:
             return Response({"detail": "body が空です"}, status=status.HTTP_400_BAD_REQUEST)
         # 2. 本文をクリーニング
@@ -146,7 +148,7 @@ class BlogArticleViewSet(BaseModelViewSet):
                 vectors.append({
                     "id": f"{article_id}-{i}",
                     "values": emb.data[0].embedding,
-                    "metadata": {"text": chunk, "article_id": str(article_id)}
+                    "metadata": {"text": chunk, "article_id": str(article_id),"title":str(title)}
                 })
             index.upsert(vectors=vectors)
         except Exception as e:  # 🔽 修正: 例外キャッチ

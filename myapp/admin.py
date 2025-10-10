@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Tag,UploadedFile,BlogArticle
+from .models import Tag,UploadedFile,BlogArticle,ChatLog
 
 @admin.register(Tag)
 class TagAdmin(admin.ModelAdmin):
@@ -19,3 +19,10 @@ class BlogAdmin(admin.ModelAdmin):
     def display_tags(self, obj):
         return ", ".join([tag.name for tag in obj.tags.all()])
     display_tags.short_description = "Tags"
+    
+@admin.register(ChatLog)
+class ChatLogAdmin(admin.ModelAdmin):
+    list_display = ("id", "question", "created_at")  # 一覧に表示するカラム
+    search_fields = ("question",)  # 質問文で検索できるようにする
+    list_filter = ("created_at",)  # 絞り込みフィルタを追加
+    ordering = ("-created_at",)  # 新しい順に並べる
