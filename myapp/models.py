@@ -25,3 +25,10 @@ class BlogArticle(models.Model):
 
     def __str__(self):
         return self.title
+    
+class ChatLog(models.Model):
+    question = models.TextField(verbose_name="質問文")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.question}"
