@@ -140,7 +140,7 @@ class RagAnswer(APIView):
         #             if allow_save:
         #                 ChatLog.objects.create(question=query_text, allow_save=True)
         if max_score < 0.5 and allow_save:
-                ChatLog.objects.create(question=query_text, allow_save=True)
+                ChatLog.objects.create(question=query_text)
         
         if use_context:
             messages = [
