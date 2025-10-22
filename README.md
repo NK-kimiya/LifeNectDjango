@@ -1,7 +1,11 @@
 # LifeConnect Backend (Django)
 
 This is the backend API for **LifeConnect**, a web application developed with Django and React.  
-It provides RESTful APIs for article management and AI chat (RAG integration).
+It provides RESTful APIs for article management and AI chat (RAG integration). 
+
+## Demo
+👉 [https://kimiyasu.com/2025/10/16/cmsrag%e3%82%a2%e3%83%97%e3%83%aa/](https://kimiyasu.com/2025/10/16/cmsrag%e3%82%a2%e3%83%97%e3%83%aa/) <!-- optional -->
+
 
 ---
 
