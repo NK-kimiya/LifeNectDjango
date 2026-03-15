@@ -29,8 +29,7 @@ pinecone-client==3.2.2
 pinecone-plugin-assistant==1.8.0
 pinecone-plugin-interface==0.0.7
 psycopg2-binary==2.9.11
-pydantic==2.11.9
-pydantic_core==2.33.2
+pydantic<2
 PyJWT==2.10.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.1
