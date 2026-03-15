@@ -12,12 +12,14 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
-from dotenv import load_dotenv
+from dotenv import load_dotenv; load_dotenv()
+from dotenv import load_dotenv; load_dotenv()
 import environ
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
 from datetime import timedelta
+import dj_database_url
 
 SIMPLE_JWT = {
     # アクセストークンの有効期限（例: 5分）
@@ -113,12 +115,29 @@ WSGI_APPLICATION = 'myproject.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
+
+
+# DATABASES = {
+#         'default': {
+#             'ENGINE': 'django.db.backends.postgresql',
+#             'NAME': os.getenv("DB_NAME"),
+#             'USER': os.getenv("DB_USER"),
+#             'PASSWORD': os.getenv("DB_PASSWORD"),
+#             'HOST': os.getenv("DB_HOST"),
+#             'PORT': os.getenv("DB_PORT"),
+#         }
+#     }
+
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    "default": dj_database_url.parse(os.environ.get("DATABASE_URL")),
 }
+
 
 
 # Password validation
