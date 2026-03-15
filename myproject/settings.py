@@ -12,7 +12,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
-from dotenv import load_dotenv
+from dotenv import load_dotenv; load_dotenv()
+from dotenv import load_dotenv; load_dotenv()
 import environ
 import cloudinary
 import cloudinary.uploader
@@ -124,12 +125,28 @@ WSGI_APPLICATION = 'myproject.wsgi.application'
 #     }
 # }
 
+
 DATABASES = {
     "default": dj_database_url.config(
         default=f"sqlite:///{BASE_DIR}/db.sqlite3",
         conn_max_age=600
     )
 }
+
+
+# DATABASES = {
+#         'default': {
+#             'ENGINE': 'django.db.backends.postgresql',
+#             'NAME': os.getenv("DB_NAME"),
+#             'USER': os.getenv("DB_USER"),
+#             'PASSWORD': os.getenv("DB_PASSWORD"),
+#             'HOST': os.getenv("DB_HOST"),
+#             'PORT': os.getenv("DB_PORT"),
+#         }
+#     }
+
+
+
 
 
 # Password validation
