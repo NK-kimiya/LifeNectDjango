@@ -83,7 +83,7 @@ MIDDLEWARE = [
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "https://life-nect-react-31kyaroko-bridgeailife-9023s-projects.vercel.app",
+    "https://life-nect-react-l3bnzn0ax-bridgeailife-9023s-projects.vercel.app",
 ]
 
 REST_FRAMEWORK = {
