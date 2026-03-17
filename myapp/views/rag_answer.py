@@ -13,9 +13,96 @@ from myapp.models import ChatLog
 
 import traceback
 import sys
+
+import re
+import unicodedata
 class RagAnswer(APIView):
     authentication_classes = [] 
     permission_classes = [AllowAny]
+    
+    #安全対策のためのキーワードの導入
+    SUICIDE_HIGH_RISK_KEYWORDS = [
+        "自殺",
+        "死にたい",
+        "しにたい",
+        "消えたい",
+        "いなくなりたい",
+        "命を絶ちたい",
+        "自ら命を絶つ",
+        "死ぬ方法",
+        "楽に死ねる",
+        "確実に死ねる",
+        "首を吊る",
+        "首つり",
+        "飛び降りる",
+        "飛び降り",
+        "リストカット",
+        "od",
+        "オーバードーズ",
+        "過量服薬",
+        "遺書",
+    ]
+
+    SUICIDE_CAUTION_KEYWORDS = [
+        "生きるのがつらい",
+        "生きていたくない",
+        "もう無理",
+        "死んだほうがまし",
+        "消えてしまいたい",
+        "つらすぎる",
+        "希望がない",
+        "限界",
+    ]
+    
+    def _normalize_for_keyword_check(self, text: str) -> str:
+        if not text:
+            return ""
+
+        # 全角半角ゆれ吸収
+        text = unicodedata.normalize("NFKC", text)
+        text = text.lower()
+
+        # 空白除去
+        text = re.sub(r"\s+", "", text)
+
+        # 記号除去（必要最低限）
+        text = re.sub(r"[、。.,!！?？・/／~〜\-ー_=+「」『』（）()［］\[\]【】<>＜＞\"'`:;]", "", text)
+
+        return text
+    
+    
+    def _detect_suicide_risk(self, text: str) -> dict:
+        normalized = self._normalize_for_keyword_check(text)
+
+        matched_high = [
+            kw for kw in self.SUICIDE_HIGH_RISK_KEYWORDS
+            if self._normalize_for_keyword_check(kw) in normalized
+        ]
+
+        matched_caution = [
+            kw for kw in self.SUICIDE_CAUTION_KEYWORDS
+            if self._normalize_for_keyword_check(kw) in normalized
+        ]
+
+        if matched_high:
+            return {
+                "is_suicide_risk": True,
+                "risk_level": "high",
+                "matched_keywords": matched_high,
+            }
+
+        if matched_caution:
+            return {
+                "is_suicide_risk": True,
+                "risk_level": "caution",
+                "matched_keywords": matched_caution,
+            }
+
+        return {
+            "is_suicide_risk": False,
+            "risk_level": None,
+            "matched_keywords": [],
+        }
     
     def _to_bool(self, v: Any) -> bool:
         if isinstance(v, bool):
@@ -70,6 +157,40 @@ class RagAnswer(APIView):
                 {"detail": "質問内容が入力されていません。メッセージを入力してください。"},
                 status=400
             )
+            
+        # 追加：自殺リスク判定
+        suicide_result = self._detect_suicide_risk(query_text)
+        
+        if suicide_result["is_suicide_risk"]:
+            return Response({
+                "mode": "safety_only",
+                "answer": (
+                    "大変つらいお気持ちの中で相談してくださりありがとうございます。"
+                    "この内容について、AIでは安全のため具体的なお手伝いができません。"
+                    "一人で抱えず、専門の相談窓口にぜひつながってください。"
+                ),
+                "primary_support": {
+                    "title": "まずはこちらをご覧ください（厚生労働省 公式サイト）",
+                    "name": "まもろうよ こころ",
+                    "url": "https://www.mhlw.go.jp/mamorouyokokoro/"
+                },
+                "other_supports": [
+                    {
+                        "name": "電話相談",
+                        "url": "https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/hukushi_kaigo/seikatsuhogo/jisatsu/soudan_tel.html"
+                    },
+                    {
+                        "name": "SNS相談",
+                        "url": "https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/hukushi_kaigo/seikatsuhogo/jisatsu/soudan_sns.html"
+                    },
+                    {
+                        "name": "その他の相談先",
+                        "url": "https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/hukushi_kaigo/seikatsuhogo/jisatsu/soudan_sonota.html"
+                    }
+                ],
+                "suicide_detected": True,
+                "risk_level": suicide_result["risk_level"]
+            }, status=200)
 
         # ✅ OpenAI クライアント初期化（Chat形式用）
 
@@ -214,3 +335,10 @@ class RagAnswer(APIView):
             }, status=500)
 
         return Response({"answer": answer,"article":unique_id_title_list}, status=200)
+
+#https://www.mhlw.go.jp/mamorouyokokoro/ まもろうよ　こころ
+#https://www.lifelink.or.jp/inochisos/ #いのちSOS
+
+#厚生労働省：電話相談→https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/hukushi_kaigo/seikatsuhogo/jisatsu/soudan_tel.html
+#厚生労働省：SNS相談→https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/hukushi_kaigo/seikatsuhogo/jisatsu/soudan_sns.html
+#厚生労働省：その他の連絡先→https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/hukushi_kaigo/seikatsuhogo/jisatsu/soudan_sonota.html
