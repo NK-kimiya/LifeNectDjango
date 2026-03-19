@@ -16,7 +16,62 @@ import sys
 
 import re
 import unicodedata
+import json
+
+HIGH_THRESHOLD = 0.5
+MID_THRESHOLD = 0.6
+LOWER_LIMIT = 0.4
+
+SUICIDE_DETECTION_PROMPT = """
+    あなたは安全判定AIです。
+
+    ユーザーの発言が「自殺や自傷行為を示唆しているか」を判定してください。
+
+    重要:
+    - 単なるネガティブ感情（つらい、しんどい、疲れた）は検知しない
+    - 明確または暗に「死にたい」「消えたい」「生きる意味がない」などの意図がある場合のみ検知する
+    - 方法の相談・準備・計画を含む場合は高リスク
+
+    以下のJSON形式で回答してください:
+
+    {
+    "suicide_detected": true or false,
+    "risk_level": "low" | "medium" | "high",
+    "reason": "簡潔な理由"
+    }
+
+    ユーザー発言:
+    """
+
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
 class RagAnswer(APIView):
+ 
+
+    def detect_suicide_with_llm(self,user_input: str):
+        prompt = SUICIDE_DETECTION_PROMPT + user_input
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",  # 軽量でOK
+            messages=[
+                {"role": "system", "content": "あなたは安全判定AIです"},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0  # 判定なのでブレさせない
+        )
+
+        content = response.choices[0].message.content
+
+        try:
+            content = re.sub(r"```json|```", "", content).strip()
+            result = json.loads(content)
+            return result
+        except:
+            # フォールバック（失敗時は安全側に倒す）
+            return {
+                "suicide_detected": False,
+                "risk_level": "low"
+            }
     authentication_classes = [] 
     permission_classes = [AllowAny]
     
@@ -126,7 +181,7 @@ class RagAnswer(APIView):
                 {"role": "user", "content": text},
             ]
             resp = client.chat.completions.create(
-                model="gpt-3.5-turbo",  # 既存のChatモデルに合わせる
+                model="gpt-4o-mini",  # 既存のChatモデルに合わせる
                 messages=messages,
                 temperature=0,
                 max_tokens=200,
@@ -162,6 +217,7 @@ class RagAnswer(APIView):
         suicide_result = self._detect_suicide_risk(query_text)
         
         if suicide_result["is_suicide_risk"]:
+            
             return Response({
                 "mode": "safety_only",
                 "answer": (
@@ -191,23 +247,46 @@ class RagAnswer(APIView):
                 "suicide_detected": True,
                 "risk_level": suicide_result["risk_level"]
             }, status=200)
-
+            
         # ✅ OpenAI クライアント初期化（Chat形式用）
 
-        client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        
         pc = pinecone.Pinecone(api_key=settings.PINECONE_API_KEY)
         index = pc.Index(settings.PINECONE_INDEX_NAME)
             
         query_vec = self._embed(client, query_text)
         matches = self._search_pinecone(index, query_vec, top_k=5) 
+
         
+        filtered_matches = [
+            m for m in matches
+            if m.get("score", 0.0) >= HIGH_THRESHOLD  # ← 0.5以上
+        ]
+
+        context_text = "\n\n".join(
+            m.get("metadata", {}).get("text", "")
+            for m in filtered_matches
+            if m.get("metadata", {}).get("text")
+        )
+        
+        use_context = bool(context_text.strip())
+
+        for m in filtered_matches:
+            print("score:", m.get("score"), "title:", m.get("metadata", {}).get("title"))
+
+        print("取得件数:", len(matches))
+        print("使用件数（0.5以上）:", len(filtered_matches))
+
+        
+        for m in filtered_matches:
+            print("score:", m.get("score"), "title:", m.get("metadata", {}).get("title"))
         id_title_list = [
         { 
         "id": int(m.get("metadata", {}).get("article_id")) 
               if m.get("metadata", {}).get("article_id") is not None else None,
         "title": m.get("metadata", {}).get("title")
         }
-       for m in matches
+       for m in filtered_matches
        if m.get("metadata", {}).get("title") and m.get("metadata", {}).get("article_id")
        ]
         
@@ -220,97 +299,111 @@ class RagAnswer(APIView):
         unique_id_title_list = [{"title": t, "id": i} for t, i in unique_titles.items()]
         print("全件（重複排除済み）:", unique_id_title_list)
         question_for_answer = query_text
-            
-        scores = [m.get("score", 0.0) for m in matches]
-        max_score = max([m.get("score", 0.0) for m in matches], default=0.0)
-            
-
-        context_text = "\n\n".join(
-                    m.get("metadata", {}).get("text", "") for m in matches
-                    if m.get("metadata", {}).get("text")
-        )
-        best_match = max(matches, key=lambda m: m.get("score", 0.0))
-        top_title = best_match.get("metadata", {}).get("title")
-        print("類似度が近い記事のタイトル："+str(top_title))
-        use_context = use_context = bool(context_text.strip())
-                
-        # elif LOWER_LIMIT <= max_score < THRESHOLD:
-        #         corrected = self._normalize_query(client, query_text)
-        #         print("補正した結果は：" + corrected)
-        #         print("補正した結果は："+corrected)
-                
-        #         original_scores = [m.get("score", 0.0) for m in matches]
-        #         print(f"補正前のスコア: {original_scores} (最大: {max_score})")
-        #         corrected_vec = self._embed(client, corrected)
-        #         matches2 = self._search_pinecone(index, corrected_vec, top_k=5)
-                
-        #         corrected_scores = [m.get("score", 0.0) for m in matches2]
-        #         max_score_corrected = max(corrected_scores) if corrected_scores else 0.0
-        #         print(f"補正後のスコア: {corrected_scores} (最大: {max_score_corrected})")
-        #         best = [m for m in matches2 if m.get("score", 0.0) >= THRESHOLD]
-        #         if best:
-        #             context_text = "\n\n".join(
-        #                m.get("metadata", {}).get("text", "") for m in best
-        #                if m.get("metadata", {}).get("text")
-        #             )
-        #             question_for_answer = corrected  # ← プロンプトには補正文を使う
-        #             use_context = True
-        #         else:
-        #             print("補正してもダメでした。")
-        #             # 補正してもダメ → 許可時のみ保存
-        #             if allow_save:
-        #                 ChatLog.objects.create(question=query_text, allow_save=True)
-        if max_score < 0.5 and allow_save:
-                ChatLog.objects.create(question=query_text)
-        
-        if use_context:
-            messages = [
+       
+        messages = [
                 {
                     "role": "system",
-                    "content": "あなたは親切なカウンセラーです。質問に対して丁寧な敬語で、分かりやすく回答してください。"
+                    "content": """
+            あなたは安全配慮型AIです。
+
+            以下を必ず実行してください：
+
+            1. 自殺リスクの判定
+            2. 問題なければ質問に回答
+
+            出力は必ずJSON:
+
+            {
+            "suicide_detected": true/false,
+            "risk_level": "low|medium|high",
+            "answer": "回答内容"
+            }
+
+            ルール:
+            - ネガティブ感情だけでは検知しない
+            - 自殺意図がある場合のみtrue
+            - trueの場合は具体的回答をしない
+            
+            ルール：
+            answerはHTML形式で出力してください。
+            以下のルールを守ってください：
+
+            - 段落は <p> タグを使う
+            - 箇条書きは <ul><li> を使う
+            - 改行だけでなく構造化する
+            - 危険なタグ（scriptなど）は使わない
+            """
                 },
                 {
                     "role": "user",
-                    "content": f"""以下の情報を参考に、質問に答えてください。
-        ・まず結論を述べてください。
-        ・必要に応じて箇条書きで整理してください。
-        ・途中で終わらないように、最後までしっかり出力してください。
+                    "content": f"""
+            [質問]
+            {question_for_answer}
 
-        [質問]
-        {question_for_answer}
-
-        [参考情報]
-        {context_text}
-        """
-                }
-            ]
-        else:
-            messages = [
-                {
-                    "role": "system",
-                    "content": "あなたは親切なカウンセラーです。質問に対して丁寧な敬語で、分かりやすく回答してください。"
-                },
-                {
-                    "role": "user",
-                    "content": f"""質問に答えてください。
-        ・まず結論を述べてください。
-        ・必要に応じて箇条書きで整理してください。
-        ・途中で終わらないように、最後までしっかり出力してください。
-
-        [質問]
-        {question_for_answer}
-        """
+            [参考情報]
+            {context_text if use_context else "なし"}
+            """
                 }
             ]
             
-
         try:
             response = client.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=messages,
-                    max_tokens=1000
+                    max_tokens=1000,
+                    response_format={"type": "json_object"}
                 )
-            answer = response.choices[0].message.content.strip()
+            
+            # JSONパース
+            content = response.choices[0].message.content
+
+            try:
+                result = json.loads(content)
+            except json.JSONDecodeError:
+                # 念のための保険
+                result = {
+                    "suicide_detected": False,
+                    "risk_level": "low",
+                    "answer": "回答の解析に失敗しました。もう一度お試しください。"
+                }
+                
+            except json.JSONDecodeError:
+                 result = {
+                    "suicide_detected": False,
+                    "answer": content   # ←これが重要！！
+                }
+            
+            if result["suicide_detected"]:
+                return Response({
+                "mode": "safety_only",
+                "answer": (
+                    "大変つらいお気持ちの中で相談してくださりありがとうございます。"
+                    "この内容について、AIでは安全のため具体的なお手伝いができません。"
+                    "一人で抱えず、専門の相談窓口にぜひつながってください。"
+                ),
+                "primary_support": {
+                    "title": "まずはこちらをご覧ください（厚生労働省 公式サイト）",
+                    "name": "まもろうよ こころ",
+                    "url": "https://www.mhlw.go.jp/mamorouyokokoro/"
+                },
+                "other_supports": [
+                    {
+                        "name": "電話相談",
+                        "url": "https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/hukushi_kaigo/seikatsuhogo/jisatsu/soudan_tel.html"
+                    },
+                    {
+                        "name": "SNS相談",
+                        "url": "https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/hukushi_kaigo/seikatsuhogo/jisatsu/soudan_sns.html"
+                    },
+                    {
+                        "name": "その他の相談先",
+                        "url": "https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/hukushi_kaigo/seikatsuhogo/jisatsu/soudan_sonota.html"
+                    }
+                ],
+                "suicide_detected": True,
+                "risk_level": suicide_result["risk_level"]
+            }, status=200)
+            answer = result.get("answer", "回答を生成できませんでした。")
 
             # 参考情報が使えなかったケースは文末に注意書きを付与（任意）
             if not use_context:
@@ -334,7 +427,11 @@ class RagAnswer(APIView):
                 "trace": traceback.format_exc(),      # Traceback全文
             }, status=500)
 
-        return Response({"answer": answer,"article":unique_id_title_list}, status=200)
+        return Response({
+            "answer": answer,
+            # 🔥 context使ってる時だけarticle返す
+            "article": unique_id_title_list 
+        }, status=200)
 
 #https://www.mhlw.go.jp/mamorouyokokoro/ まもろうよ　こころ
 #https://www.lifelink.or.jp/inochisos/ #いのちSOS

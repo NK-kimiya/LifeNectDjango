@@ -23,6 +23,7 @@ import dj_database_url
 
 load_dotenv()
 
+
 SIMPLE_JWT = {
     # アクセストークンの有効期限（例: 5分）
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
