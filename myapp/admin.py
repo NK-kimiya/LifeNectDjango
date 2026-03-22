@@ -13,8 +13,19 @@ class UploadAdmin(admin.ModelAdmin):
     
 @admin.register(BlogArticle)
 class BlogAdmin(admin.ModelAdmin):
-    list_display = ("id", "title", "eyecatch", "body", "display_tags", "created_at", "updated_at")  # 一覧画面に表示するフィールド
-    search_fields = ("id",)
+    list_display = (
+        "id",
+        "title",
+        "content_type",  # ←追加
+        "eyecatch",
+        "body",
+        "display_tags",
+        "created_at",
+        "updated_at"
+    )
+    search_fields = ("id", "title")
+    list_filter = ("content_type",)
+
 
     def display_tags(self, obj):
         return ", ".join([tag.name for tag in obj.tags.all()])

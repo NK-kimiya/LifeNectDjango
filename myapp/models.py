@@ -20,6 +20,18 @@ class BlogArticle(models.Model):
     eyecatch = models.URLField(blank=True, null=True)  # アイキャッチ画像URL
     body = models.TextField()
     tags = models.ManyToManyField(Tag, related_name="articles", blank=True)  # 複数タグ
+
+    TYPE_CHOICES = [
+        ("blog", "ブログ記事"),
+        ("qa", "Q&A"),
+    ]
+
+    content_type = models.CharField(
+        max_length=10,
+        choices=TYPE_CHOICES,
+        default="blog"
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     def __str__(self):

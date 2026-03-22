@@ -7,7 +7,12 @@ class BlogArticleReadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BlogArticle
-        fields = ["id", "title", "eyecatch", "body", "tags", "created_at", "updated_at"]
+        fields = [
+            "id", "title", "eyecatch", "body",
+            "tags",
+            "content_type",  # ←追加
+            "created_at", "updated_at"
+        ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 class BlogArticleWriteSerializer(serializers.ModelSerializer):
@@ -18,7 +23,11 @@ class BlogArticleWriteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BlogArticle
-        fields = ["id", "title", "eyecatch", "body", "tag_ids"]
+        fields = [
+            "id", "title", "eyecatch", "body",
+            "content_type",  # ←追加
+            "tag_ids"
+        ]
         read_only_fields = ["id"]
 
     def create(self, validated_data):
@@ -43,4 +52,8 @@ class BlogArticleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BlogArticle
-        fields = ["id", "title", "eyecatch", "body", "tags", "created_at"]
+        fields = [
+            "id", "title", "eyecatch", "body",
+            "content_type",  # ←追加
+            "tags", "created_at"
+        ]

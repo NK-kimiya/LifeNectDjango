@@ -296,7 +296,13 @@ class RagAnswer(APIView):
             if title not in unique_titles:
                 unique_titles[title] = item["id"]
         
-        unique_id_title_list = [{"title": t, "id": i} for t, i in unique_titles.items()]
+        unique_id_title_list = [
+        {
+            "title": t,
+            "id": i
+        }
+        for t, i in unique_titles.items()
+        ]
         print("全件（重複排除済み）:", unique_id_title_list)
         question_for_answer = query_text
        
