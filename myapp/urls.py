@@ -2,7 +2,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import me, TagViewSet, UploadedFileViewSet, BlogArticleViewSet,RagAnswer,BlogArticleFilterView,BlogArticleViewSet
-
+from .views.health import health
 router = DefaultRouter()
 '''
 GET http://localhost:8000/tags/
@@ -26,4 +26,5 @@ urlpatterns = [
     path("rag-answer/", RagAnswer.as_view(), name="similar-articles"), 
     path("", include(router.urls)),
     path("articles-search/", BlogArticleFilterView.as_view(),name="articles-search"),
+    path("health/", health)
 ]
