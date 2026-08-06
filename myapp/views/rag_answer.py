@@ -9,7 +9,6 @@ import pinecone
 from typing import Any, Dict, List
 
 from pinecone.core.client.exceptions import UnauthorizedException, PineconeApiException 
-from myapp.models import ChatLog
 
 import traceback
 import sys

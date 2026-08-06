@@ -5,7 +5,6 @@ from myapp.views.base import BaseModelViewSet
 from ..serializers import (
     TagSerializer,
     UploadedFileReadSerializer, UploadedFileWriteSerializer,
-    BlogArticleReadSerializer, BlogArticleWriteSerializer,
 )
 from rest_framework.response import Response
 from rest_framework import status

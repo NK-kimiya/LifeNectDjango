@@ -1,9 +1,14 @@
 # myapp/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import me, TagViewSet, UploadedFileViewSet, BlogArticleViewSet,RagAnswer,BlogArticleFilterView,BlogArticleViewSet
+from .views import me,UploadedFileViewSet,RagAnswer
+from .views.tags import TagViewSet
 from .views.health import health
+from .views.auth import AdminLoginView, RegisterView
 router = DefaultRouter()
+from .views.auth import GoogleAuthView
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .views.post import PostViewSet
 '''
 GET http://localhost:8000/tags/
 POST http://localhost:8000/tags/
@@ -18,13 +23,16 @@ DELETE http://localhost:8000/tags/{id}/
 '''
 router.register(r"tags", TagViewSet)
 router.register(r"files", UploadedFileViewSet)
-router.register(r"articles", BlogArticleViewSet)
+router.register(r"posts", PostViewSet)
 
 
 urlpatterns = [
     path("me/", me.as_view(), name="me"),
     path("rag-answer/", RagAnswer.as_view(), name="similar-articles"), 
     path("", include(router.urls)),
-    path("articles-search/", BlogArticleFilterView.as_view(),name="articles-search"),
-    path("health/", health)
+    path("health/", health),
+    path("auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("auth/admin/login/", AdminLoginView.as_view(), name="admin-login"),
+    path("auth/register/", RegisterView.as_view(), name="register"),
+    path("auth/google/", GoogleAuthView.as_view(), name="google-auth"),
 ]

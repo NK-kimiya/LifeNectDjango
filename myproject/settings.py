@@ -22,7 +22,7 @@ from datetime import timedelta
 import dj_database_url
 
 load_dotenv()
-
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 
 SIMPLE_JWT = {
     # アクセストークンの有効期限（例: 5分）
@@ -193,6 +193,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+AUTH_USER_MODEL = "myapp.User"
 
 # 環境変数からAPIキーを取得
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
