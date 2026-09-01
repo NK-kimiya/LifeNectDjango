@@ -1,7 +1,7 @@
 # myapp/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import me,UploadedFileViewSet,RagAnswer
+from .views import MeView,UploadedFileViewSet,RagAnswer
 from .views.tags import TagViewSet
 from .views.health import health
 from .views.auth import AdminLoginView, RegisterView
@@ -9,6 +9,8 @@ router = DefaultRouter()
 from .views.auth import GoogleAuthView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .views.post import PostViewSet
+from .views import UserAvatarUploadUrlView, UserAvatarView
+from .views import PostImageUploadUrlView
 '''
 GET http://localhost:8000/tags/
 POST http://localhost:8000/tags/
@@ -27,7 +29,10 @@ router.register(r"posts", PostViewSet)
 
 
 urlpatterns = [
-    path("me/", me.as_view(), name="me"),
+    path("me/", MeView.as_view(), name="me"),
+    path("me/avatar/upload-url/", UserAvatarUploadUrlView.as_view(), name="me-avatar-upload-url"),
+    path("me/avatar/", UserAvatarView.as_view(), name="me-avatar"),
+    path("posts/upload-url/", PostImageUploadUrlView.as_view(), name="post-image-upload-url"),
     path("rag-answer/", RagAnswer.as_view(), name="similar-articles"), 
     path("", include(router.urls)),
     path("health/", health),

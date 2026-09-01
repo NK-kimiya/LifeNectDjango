@@ -44,6 +44,8 @@ class UserAdmin(DjangoUserAdmin):
         "is_superuser",
         "is_active",
         "date_joined",
+        "avatar_key",
+  
     )
     list_filter = ("role", "provider","is_staff", "is_superuser", "is_active")
     search_fields = ("email", "nickname","google_sub",)
@@ -52,6 +54,7 @@ class UserAdmin(DjangoUserAdmin):
     fieldsets = (
         (None, {"fields": ("email", "password")}),
         ("ユーザー情報", {"fields": ("nickname", "first_name", "last_name")}),
+        ("プロフィール", {"fields": ("avatar_key",)}),
         (
             "権限",
             {

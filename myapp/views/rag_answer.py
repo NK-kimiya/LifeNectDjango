@@ -3,6 +3,7 @@ from django.conf import settings
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
+from myapp.models import Post
 from openai import OpenAI
 from openai import AuthenticationError, RateLimitError, APIError
 import pinecone
@@ -45,6 +46,45 @@ SUICIDE_DETECTION_PROMPT = """
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 class RagAnswer(APIView):
+
+    def _get_root_post(self, post: Post) -> Post:
+        current = post
+
+        while current.parent_post_id:
+            current = current.parent_post
+
+        return current
+
+    #function：Post オブジェクトを、フロントに返しやすい JSON 形式の辞書に変換する
+    def _serialize_post_reference(self, post: Post, excerpt=None, score=None):
+        return {
+            #投稿の基本情報
+            "id": str(post.id),
+            "title": post.title,
+            "comment": post.comment,
+            "excerpt": excerpt,
+            #親投稿と種別を判定
+            "parent_post": str(post.parent_post_id) if post.parent_post_id else None,
+            "type": "reply" if post.parent_post_id else "post",
+            #返信数と作成日時を入れる部分
+            "comment_count": post.replies.count(),
+            "created_at": post.created_at.isoformat(),
+            #投稿者情報
+            "user": {
+                "id": post.user.id,
+                "nickname": post.user.nickname,
+                "email": post.user.email,
+            } if post.user else None,
+            "score": score,
+            #タグ一覧を入れる部分
+            "tags": [
+                {
+                    "id": tag.id,
+                    "name": tag.name,
+                }
+                for tag in post.tags.all()
+            ],
+        }
  
 
     def detect_suicide_with_llm(self,user_input: str):
@@ -201,6 +241,7 @@ class RagAnswer(APIView):
         res = index.query(vector=vec, top_k=top_k, include_metadata=True)
         return res.get("matches", getattr(res, "matches", [])) or []
 
+
     def post(self, request):
         query_text: str = request.data.get("text", "") or request.data.get("query", "")
         allow_save: bool = self._to_bool(request.data.get("allowSave"))
@@ -279,30 +320,70 @@ class RagAnswer(APIView):
         
         for m in filtered_matches:
             print("score:", m.get("score"), "title:", m.get("metadata", {}).get("title"))
-        id_title_list = [
-        { 
-        "id": int(m.get("metadata", {}).get("article_id")) 
-              if m.get("metadata", {}).get("article_id") is not None else None,
-        "title": m.get("metadata", {}).get("title")
-        }
-       for m in filtered_matches
-       if m.get("metadata", {}).get("title") and m.get("metadata", {}).get("article_id")
-       ]
-        
-        unique_titles = {}
-        for item in id_title_list:
-            title = item["title"]
-            if title not in unique_titles:
-                unique_titles[title] = item["id"]
-        
-        unique_id_title_list = [
-        {
-            "title": t,
-            "id": i
-        }
-        for t, i in unique_titles.items()
+        reference_candidates = [
+            {
+                "post_id": m.get("metadata", {}).get("post_id"),
+                "title": m.get("metadata", {}).get("title"),
+                "excerpt": m.get("metadata", {}).get("text"),
+                "parent_post": m.get("metadata", {}).get("parent_post"),
+                "type": m.get("metadata", {}).get("type"),
+                "score": m.get("score"),
+            }
+            for m in filtered_matches
+            if m.get("metadata", {}).get("post_id")
         ]
-        print("全件（重複排除済み）:", unique_id_title_list)
+
+        post_ids = []
+        for item in reference_candidates:
+            if item["post_id"] not in post_ids:
+                post_ids.append(item["post_id"])
+
+        posts = Post.objects.filter(id__in=post_ids).select_related("user", "parent_post")
+        post_map = {str(post.id): post for post in posts}
+
+        #返却用リストと重複チェック用セットを用意する部分
+        references = []
+        seen_matched_post_ids = set()
+
+        #検索結果候補を1件ずつ処理
+        for item in reference_candidates:
+            post_id = item["post_id"]
+
+            #同じ投稿/コメントの重複を除外
+            if post_id in seen_matched_post_ids:
+                continue
+
+            seen_matched_post_ids.add(post_id)
+
+            #DBから実際の Post を取得
+            try:
+                matched_post = (
+                    Post.objects
+                    .select_related("user", "parent_post")
+                    .prefetch_related("tags")
+                    .get(id=post_id)
+                )
+            except Post.DoesNotExist:
+                continue
+
+            #属している親掲示板を取得
+            board_post = self._get_root_post(matched_post)
+
+            #フロントへ返す形に整形して追加
+            references.append({
+                "matched_message": self._serialize_post_reference(
+                    matched_post,
+                    excerpt=item["excerpt"],
+                    score=item["score"],
+                ),
+                "board_post": self._serialize_post_reference(
+                    board_post,
+                    excerpt=None,
+                    score=None,
+                ),
+            })
+
+        
         question_for_answer = query_text
        
         messages = [
@@ -332,7 +413,7 @@ class RagAnswer(APIView):
             ルール：
             answerはHTML形式で出力してください。
             以下のルールを守ってください：
-
+            -参考情報があれば、参考情報を優先して回答する。
             - 段落は <p> タグを使う
             - 箇条書きは <ul><li> を使う
             - 改行だけでなく構造化する
@@ -352,6 +433,8 @@ class RagAnswer(APIView):
             ]
             
         try:
+            print("Sending request to AI service...")
+            print(messages)
             response = client.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=messages,
@@ -434,8 +517,7 @@ class RagAnswer(APIView):
 
         return Response({
             "answer": answer,
-            # 🔥 context使ってる時だけarticle返す
-            "article": unique_id_title_list 
+            "references": references,
         }, status=200)
 
 #https://www.mhlw.go.jp/mamorouyokokoro/ まもろうよ　こころ

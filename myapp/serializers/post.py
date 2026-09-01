@@ -3,23 +3,44 @@
 from rest_framework import serializers
 from myapp.models import Post, Tag, User
 from .tag import TagSerializer
+from myapp.services.cloudflare_r2 import (
+    CloudflareR2Error,
+    generate_presigned_read_url,
+)
 
 #投稿に紐づくユーザー情報を表示するためのシリアライザー
 class PostUserSerializer(serializers.ModelSerializer):
+    avatar_url = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
             "id",
             "email",
             "nickname",
+            "avatar_url",
         ]
 
+    def get_avatar_url(self, obj):
+        try:
+            return generate_presigned_read_url(obj.avatar_key)
+        except CloudflareR2Error:
+            return None
 
-#投稿を「読み取り用」に表示するためのシリアライザー
-class PostReadSerializer(serializers.ModelSerializer):
-    user = PostUserSerializer(read_only=True)#投稿を「読み取り用」に表示するためのシリアライザー(APIから書き換え不可)
-    tags = TagSerializer(many=True, read_only=True)#投稿を「読み取り用」に表示するためのシリアライザー
-    comment_count = serializers.IntegerField(read_only=True)
+
+class PostSerializer(serializers.ModelSerializer):
+    user = PostUserSerializer(read_only=True)
+    tags = serializers.StringRelatedField(many=True)
+    image_url = serializers.SerializerMethodField()
+
+    def get_image_url(self, obj):
+        if not obj.image_key:
+            return None
+
+        try:
+            return generate_presigned_read_url(obj.image_key)
+        except CloudflareR2Error:
+            return None
 
     class Meta:
         model = Post
@@ -31,12 +52,8 @@ class PostReadSerializer(serializers.ModelSerializer):
             "image_url",
             "parent_post",
             "tags",
-            "comment_count",
             "created_at",
-            "updated_at",
         ]
-        read_only_fields = ["id", "user", "created_at", "updated_at"]#読み取り専用にする
-
 
 #投稿を「作成・更新するため」のシリアライザー
 class PostWriteSerializer(serializers.ModelSerializer):
@@ -60,11 +77,62 @@ class PostWriteSerializer(serializers.ModelSerializer):
             "id",
             "title",
             "comment",
-            "image_url",
+            "image_key",
+            "image_content_type",
             "parent_post",
             "tag_ids",
         ]
         read_only_fields = ["id"]
+
+    def validate_image_key(self, value):
+        if not value:
+            return value
+
+        request = self.context.get("request")
+        if not request or not request.user or not request.user.is_authenticated:
+            raise serializers.ValidationError("Authentication is required.")
+
+        expected_prefix = f"posts/users/{request.user.id}/images/"
+        if not value.startswith(expected_prefix):
+            raise serializers.ValidationError("Invalid image key.")
+
+        return value
+
+    def validate_image_content_type(self, value):
+        if not value:
+            return value
+
+        allowed_content_types = {
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+        }
+
+        if value not in allowed_content_types:
+            raise serializers.ValidationError("Unsupported image content type.")
+
+        return value
+
+    def validate(self, attrs):
+        image_key = attrs.get("image_key")
+        image_content_type = attrs.get("image_content_type")
+        parent_post = attrs.get("parent_post")
+        if parent_post is None and self.instance:
+            parent_post = self.instance.parent_post
+
+        if bool(image_key) != bool(image_content_type):
+            raise serializers.ValidationError(
+                "image_key and image_content_type must be set together."
+            )
+
+        if parent_post and image_key:
+            raise serializers.ValidationError(
+                "Replies cannot have images."
+            )
+
+    
+
+        return attrs
 
     #arent_post の値を検証するメソッド
     def validate_parent_post(self, value):
@@ -102,11 +170,12 @@ class PostWriteSerializer(serializers.ModelSerializer):
         return instance
 
 
-class PostSerializer(serializers.ModelSerializer):
+class PostReadSerializer(serializers.ModelSerializer):
     user = PostUserSerializer(read_only=True)
-    tags = serializers.StringRelatedField(many=True)
+    tags = TagSerializer(many=True, read_only=True)
+    comment_count = serializers.IntegerField(read_only=True)
+    image_url = serializers.SerializerMethodField()
 
-    #投稿用シリアライザー
     class Meta:
         model = Post
         fields = [
@@ -117,5 +186,17 @@ class PostSerializer(serializers.ModelSerializer):
             "image_url",
             "parent_post",
             "tags",
+            "comment_count",
             "created_at",
+            "updated_at",
         ]
+        read_only_fields = ["id", "user", "created_at", "updated_at"]
+
+    def get_image_url(self, obj):
+        if not obj.image_key:
+            return None
+
+        try:
+            return generate_presigned_read_url(obj.image_key)
+        except CloudflareR2Error:
+            return None

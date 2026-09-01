@@ -29,6 +29,9 @@ class User(AbstractUser):
     class Role(models.TextChoices):
         ADMIN = "admin", "管理者"
         USER = "user", "ユーザー"
+
+    avatar_key = models.CharField(max_length=500, blank=True, null=True)
+    avatar_content_type = models.CharField(max_length=100, blank=True, null=True)
     provider = models.CharField(max_length=20, default="email")
     google_sub = models.CharField(max_length=255, blank=True, null=True, unique=True)
     username = None
@@ -91,6 +94,17 @@ class Post(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    image_key = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+    )
+    image_content_type = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+    )
 
     def __str__(self):
         return self.title
