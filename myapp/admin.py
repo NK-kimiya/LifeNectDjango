@@ -21,6 +21,7 @@ class PostAdmin(admin.ModelAdmin):
         "created_at",
         "updated_at",
         "display_tags",
+        "is_visible",
     )
 
     def display_tags(self, obj):

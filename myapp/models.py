@@ -105,6 +105,8 @@ class Post(models.Model):
         blank=True,
         null=True,
     )
+    is_visible = models.BooleanField(default=True)
+
 
     def __str__(self):
         return self.title

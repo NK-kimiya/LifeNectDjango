@@ -33,6 +33,15 @@ class PostSerializer(serializers.ModelSerializer):
     tags = serializers.StringRelatedField(many=True)
     image_url = serializers.SerializerMethodField()
 
+    def to_representation(self, instance):
+        if not instance.is_visible:
+            return {
+                "id": str(instance.id),
+                "is_visible": False,
+            }
+
+        return super().to_representation(instance)
+
     def get_image_url(self, obj):
         if not obj.image_key:
             return None
@@ -46,6 +55,7 @@ class PostSerializer(serializers.ModelSerializer):
         model = Post
         fields = [
             "id",
+            "is_visible",
             "user",
             "title",
             "comment",
@@ -81,6 +91,7 @@ class PostWriteSerializer(serializers.ModelSerializer):
             "image_content_type",
             "parent_post",
             "tag_ids",
+            "is_visible",
         ]
         read_only_fields = ["id"]
 
@@ -180,6 +191,7 @@ class PostReadSerializer(serializers.ModelSerializer):
         model = Post
         fields = [
             "id",
+            "is_visible",
             "user",
             "title",
             "comment",
@@ -191,6 +203,15 @@ class PostReadSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "user", "created_at", "updated_at"]
+
+    def to_representation(self, instance):
+        if not instance.is_visible:
+            return {
+                "id": str(instance.id),
+                "is_visible": False,
+            }
+
+        return super().to_representation(instance)
 
     def get_image_url(self, obj):
         if not obj.image_key:
