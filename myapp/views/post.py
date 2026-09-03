@@ -48,6 +48,13 @@ class PostViewSet(BaseModelViewSet):
         serializer = PostReadSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     def get_queryset(self):
+        if self.action in ["retrieve", "update", "partial_update", "destroy", "replies"]:
+            return (
+                Post.objects
+                .all()
+                .annotate(comment_count=Count("replies", distinct=True))
+                .order_by("-created_at")
+            )
         queryset = (
             Post.objects
             .filter(parent_post__isnull=True)
