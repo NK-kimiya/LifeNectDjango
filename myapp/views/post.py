@@ -181,6 +181,7 @@ class PostViewSet(BaseModelViewSet):
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)#部分更新かどうかを取得:PATCH→TRUE、PUT→False
         instance = self.get_object()#更新対象の投稿データを取得
+        was_visible = instance.is_visible
 
         serializer = self.get_serializer(#Selializerのインスタンスを返す
             instance,#現在の投稿データを serializer に渡す
@@ -189,63 +190,76 @@ class PostViewSet(BaseModelViewSet):
         )
         serializer.is_valid(raise_exception=True)#送られてきたデータが正しいかチェック
         self.perform_update(serializer)#DB上の投稿データを更新
-
-        #更新後のID、コメント、タイトルを取得
-        post_id = serializer.instance.id
-        comment = serializer.validated_data.get("comment", instance.comment)
-        title = serializer.validated_data.get("title", instance.title)
-
-        #コメントが空だった場合の、処理
-        if not comment:
-            return Response(
-                {"detail": "comment が空です。"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        text_only = BeautifulSoup(comment, "html.parser").get_text()#コメントをテキスト本文のみにする
-        cleaned_text = re.sub(r"\s+", " ", text_only).strip()#余分な空白や改行を整理
+        post = serializer.instance
+        is_visible = post.is_visible
+        content_changed = (
+            "comment" in serializer.validated_data
+            or "title" in serializer.validated_data
+        )
 
         try:
-            client = OpenAI(api_key=settings.OPENAI_API_KEY)
-            pc = Pinecone(api_key=settings.PINECONE_API_KEY)
-            index = pc.Index("my-index")
+            if was_visible and not is_visible:
+                delete_post_vectors(post.id)
 
-            index.delete(filter={"post_id": str(post_id)})#Pinecone にある古いベクトルデータを削除
+            elif not was_visible and is_visible:
+                upsert_post_vectors(post)
 
-            chunks = chunk_text(cleaned_text, chunk_size=200, overlap=50)#投稿文からチャンクを作成
-
-            vectors = []
-            for i, chunk in enumerate(chunks):
-                emb = client.embeddings.create(#文章のベクトル化
-                    input=chunk,
-                    model="text-embedding-3-small",
-                )
-                vectors.append({
-                    "id": f"{post_id}-{i}",
-                    "values": emb.data[0].embedding,
-                    "metadata": {
-                        "text": chunk,
-                        "post_id": str(post_id),
-                        "title": str(title),
-                        "type": "reply" if instance.parent_post_id else "post",
-                    }
-                })
-
-            index.upsert(vectors=vectors)#作成したベクトルデータを Pinecone に登録
+            elif is_visible and content_changed:
+                delete_post_vectors(post.id)
+                upsert_post_vectors(post)
 
         except Exception:
             return Response(
-                {"detail": "更新処理中にエラーが発生しました。"},
+                {"detail": "Pineconeの更新処理に失敗しました。"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(PostReadSerializer(post).data, status=status.HTTP_200_OK)
 
     def get_serializer_class(self):
         if self.action in ["create", "update", "partial_update"]:
             return PostWriteSerializer
         return PostReadSerializer
 
+def delete_post_vectors(post_id):
+    pc = Pinecone(api_key=settings.PINECONE_API_KEY)
+    index = pc.Index("my-index")
+    index.delete(filter={"post_id": str(post_id)})
+
+
+def upsert_post_vectors(post):
+    text_only = BeautifulSoup(post.comment, "html.parser").get_text()
+    cleaned_text = re.sub(r"\s+", " ", text_only).strip()
+
+    if not cleaned_text:
+        return
+
+    chunks = chunk_text(cleaned_text, chunk_size=200, overlap=50)
+
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    pc = Pinecone(api_key=settings.PINECONE_API_KEY)
+    index = pc.Index("my-index")
+
+    vectors = []
+    for i, chunk in enumerate(chunks):
+        emb = client.embeddings.create(
+            input=chunk,
+            model="text-embedding-3-small",
+        )
+
+        vectors.append({
+            "id": f"{post.id}-{i}",
+            "values": emb.data[0].embedding,
+            "metadata": {
+                "text": chunk,
+                "post_id": str(post.id),
+                "title": str(post.title),
+                "type": "reply" if post.parent_post_id else "post",
+            },
+        })
+
+    if vectors:
+        index.upsert(vectors=vectors)
 
 def chunk_text(text: str, chunk_size: int = 200, overlap: int = 50) -> list[str]:
     chunks = []
