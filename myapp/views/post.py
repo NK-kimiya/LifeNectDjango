@@ -5,6 +5,7 @@ from django.conf import settings
 from openai import OpenAI, AuthenticationError, RateLimitError, APIError
 from pinecone import Pinecone
 from pinecone.core.client.exceptions import UnauthorizedException, PineconeApiException
+from myapp.pagination import PostPagination
 
 from rest_framework import status
 from rest_framework.response import Response
@@ -31,6 +32,7 @@ from myapp.services.cloudflare_r2 import (
 )
 class PostViewSet(BaseModelViewSet):
     #permission_classes = [IsAdminOrReadOnly]
+    pagination_class = PostPagination
     queryset = Post.objects.all().order_by("-created_at")
 
     
