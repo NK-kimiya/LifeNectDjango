@@ -9,3 +9,14 @@ class IsAdminOrReadOnly(permissions.BasePermission):
             and request.user.is_authenticated
             and (request.user.is_staff or getattr(request.user, "role", None) == "admin")
         )
+
+class IsAdminUserRole(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user
+            and request.user.is_authenticated
+            and (
+                request.user.is_staff
+                or getattr(request.user, "role", None) == "admin"
+            )
+        )

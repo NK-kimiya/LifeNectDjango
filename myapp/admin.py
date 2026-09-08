@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
-from .models import User, Tag,UploadedFile,Post
+from .models import User, Tag,UploadedFile,Post,AccountApplication
 
 @admin.register(Tag)
 class TagAdmin(admin.ModelAdmin):
@@ -92,3 +92,10 @@ class UserAdmin(DjangoUserAdmin):
             },
         ),
     )
+
+@admin.register(AccountApplication)
+class AccountApplicationAdmin(admin.ModelAdmin):
+    list_display = ("id", "email", "nickname", "status", "created_at", "reviewed_at")
+    list_filter = ("status", "created_at")
+    search_fields = ("email", "nickname", "condition")
+    readonly_fields = ("created_at",)

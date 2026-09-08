@@ -110,3 +110,23 @@ class Post(models.Model):
 
     def __str__(self):
         return self.title
+
+class AccountApplication(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "申請中"
+        APPROVED = "approved", "承認済み"
+        REJECTED = "rejected", "却下"
+
+    nickname = models.CharField(max_length=50)
+    email = models.EmailField(unique=True)
+    condition = models.TextField()
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.email} ({self.status})"

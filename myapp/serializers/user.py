@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
+from myapp.models import AccountApplication
 from myapp.services.cloudflare_r2 import (
     CloudflareR2Error,
     generate_presigned_read_url,
@@ -103,3 +104,31 @@ class RegisterResponseSerializer(serializers.ModelSerializer):
     def get_refresh(self, obj):
         refresh = RefreshToken.for_user(obj)
         return str(refresh)
+
+class AccountApplicationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AccountApplication
+        fields = ("id", "nickname", "email", "condition", "status", "created_at")
+        read_only_fields = ("id", "status", "created_at")
+
+
+class AccountApplicationAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AccountApplication
+        fields = (
+            "id",
+            "nickname",
+            "email",
+            "condition",
+            "status",
+            "created_at",
+            "reviewed_at",
+        )
+        read_only_fields = (
+            "id",
+            "nickname",
+            "email",
+            "condition",
+            "created_at",
+            "reviewed_at",
+        )

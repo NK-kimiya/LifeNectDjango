@@ -11,6 +11,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from .views.post import PostViewSet
 from .views import UserAvatarUploadUrlView, UserAvatarView
 from .views import PostImageUploadUrlView
+from .views.auth import AdminLoginView, RegisterView, GoogleAuthView, AccountApplicationView,AccountApplicationAdminViewSet
 '''
 GET http://localhost:8000/tags/
 POST http://localhost:8000/tags/
@@ -26,6 +27,11 @@ DELETE http://localhost:8000/tags/{id}/
 router.register(r"tags", TagViewSet)
 router.register(r"files", UploadedFileViewSet)
 router.register(r"posts", PostViewSet)
+router.register(
+    r"admin/account-applications",
+    AccountApplicationAdminViewSet,
+    basename="admin-account-applications",
+)
 
 
 urlpatterns = [
@@ -40,4 +46,5 @@ urlpatterns = [
     path("auth/admin/login/", AdminLoginView.as_view(), name="admin-login"),
     path("auth/register/", RegisterView.as_view(), name="register"),
     path("auth/google/", GoogleAuthView.as_view(), name="google-auth"),
+    path("auth/applications/", AccountApplicationView.as_view(), name="account-application"),
 ]
