@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
-from myapp.models import AccountApplication
+from myapp.models import AccountApplication,AccountApplicationVerification
 from myapp.services.cloudflare_r2 import (
     CloudflareR2Error,
     generate_presigned_read_url,
@@ -132,3 +132,35 @@ class AccountApplicationAdminSerializer(serializers.ModelSerializer):
             "created_at",
             "reviewed_at",
         )
+
+class AccountApplicationSendCodeSerializer(serializers.Serializer):
+    nickname = serializers.CharField(max_length=50)
+    email = serializers.EmailField()
+    condition = serializers.CharField()
+
+    def validate_email(self, value):
+        email = value.lower().strip()
+
+        if User.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError(
+                "このメールアドレスはすでに登録されています。"
+            )
+
+        if AccountApplication.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError(
+                "このメールアドレスはすでに申請済みです。"
+            )
+
+        return email
+
+class AccountApplicationVerifyCodeSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code = serializers.CharField(max_length=6, min_length=6)
+
+    def validate_email(self, value):
+        return value.lower().strip()
+
+    def validate_code(self, value):
+        if not value.isdigit():
+            raise serializers.ValidationError("認証コードは数字6桁で入力してください。")
+        return value

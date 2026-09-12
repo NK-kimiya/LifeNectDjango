@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
-from .models import User, Tag,UploadedFile,Post,AccountApplication
+from .models import User, Tag,UploadedFile,Post,AccountApplication,AccountApplicationVerification
 
 @admin.register(Tag)
 class TagAdmin(admin.ModelAdmin):
@@ -99,3 +99,31 @@ class AccountApplicationAdmin(admin.ModelAdmin):
     list_filter = ("status", "created_at")
     search_fields = ("email", "nickname", "condition")
     readonly_fields = ("created_at",)
+
+@admin.register(AccountApplicationVerification)
+class AccountApplicationVerificationAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "email",
+        "nickname",
+        "code",
+        "is_verified",
+        "expires_at",
+        "created_at",
+    )
+    list_filter = (
+        "is_verified",
+        "created_at",
+        "expires_at",
+    )
+    search_fields = (
+        "email",
+        "nickname",
+        "condition",
+    )
+    readonly_fields = (
+        "created_at",
+    )
+    ordering = (
+        "-created_at",
+    )

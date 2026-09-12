@@ -2,6 +2,8 @@ from django.db import models
 from cloudinary.models import CloudinaryField
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 import uuid
+from django.utils import timezone
+from datetime import timedelta
 
 class UserManager(BaseUserManager):
     def create_user(self, email, nickname, password=None, **extra_fields):
@@ -130,3 +132,24 @@ class AccountApplication(models.Model):
 
     def __str__(self):
         return f"{self.email} ({self.status})"
+
+class AccountApplicationVerification(models.Model):
+    nickname = models.CharField(max_length=50)
+    email = models.EmailField()
+    condition = models.TextField("疾患や障がいなど")
+    code = models.CharField(max_length=6)
+    expires_at = models.DateTimeField()
+    is_verified = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    #現在時刻が有効期限の時刻を過ぎているかの判定
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    #現在時刻から10分後の時刻を作成
+    @classmethod
+    def create_expiry_time(cls):
+        return timezone.now() + timedelta(minutes=10)
+
+    def __str__(self):
+        return f"{self.email} ({self.code})"

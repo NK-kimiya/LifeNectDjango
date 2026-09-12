@@ -15,6 +15,17 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from myapp.permissions import IsAdminUserRole
 from myapp.serializers.user import AccountApplicationAdminSerializer
+import random
+from django.conf import settings
+from myapp.models import AccountApplicationVerification
+from myapp.serializers.user import AccountApplicationSendCodeSerializer
+from django.db import IntegrityError
+from myapp.serializers.user import AccountApplicationVerifyCodeSerializer
+from myapp.services.resend_email import (
+    ResendEmailError,
+    send_application_verification_code,
+)
+
 
 User = get_user_model()
 class RegisterView(generics.CreateAPIView):
@@ -228,4 +239,103 @@ class AccountApplicationAdminViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(application)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+
+class AccountApplicationSendCodeView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = AccountApplicationSendCodeSerializer(data=request.data)
+        #リクエストで送られてきたデータをチェック
+        serializer.is_valid(raise_exception=True)
+
+        #6桁の認証コードを作成
+        code = f"{random.randint(0, 999999):06d}"
+
+        #認証コード情報をDBに保存
+        verification = AccountApplicationVerification.objects.create(
+            nickname=serializer.validated_data["nickname"],
+            email=serializer.validated_data["email"],
+            condition=serializer.validated_data["condition"],
+            code=code,
+            expires_at=AccountApplicationVerification.create_expiry_time(),#現在時刻から10分後の期限
+        )
+
+        #Resend API にリクエスト
+        try:
+            send_application_verification_code(
+                email=verification.email,
+                code=code,
+            )
+        except ResendEmailError as error:
+            verification.delete()
+            return Response(
+                {"detail": f"認証コードメールの送信に失敗しました: {str(error)}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(
+            {"detail": "認証コードをメールで送信しました。"},
+            status=status.HTTP_200_OK,
+        )
+
+
+class AccountApplicationVerifyCodeView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = AccountApplicationVerifyCodeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data["email"]
+        code = serializer.validated_data["code"]
+
+        verification = (
+            AccountApplicationVerification.objects
+            .filter(email__iexact=email, is_verified=False)
+            .order_by("-created_at")
+            .first()
+        )
+
+        if not verification:
+            return Response(
+                {"detail": "認証コードの送信履歴が見つかりません。"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if verification.is_expired():
+            return Response(
+                {"detail": "認証コードの有効期限が切れています。"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if verification.code != code:
+            return Response(
+                {"detail": "認証コードが正しくありません。"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            application = AccountApplication.objects.create(
+                nickname=verification.nickname,
+                email=verification.email,
+                condition=verification.condition,
+                status=AccountApplication.Status.PENDING,
+            )
+        except IntegrityError:
+            return Response(
+                {"detail": "このメールアドレスはすでに申請済みです。"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        verification.is_verified = True
+        verification.save(update_fields=["is_verified"])
+
+        return Response(
+            {
+                "detail": "メール認証が完了し、申請を受け付けました。",
+                "application_id": application.id,
+                "status": application.status,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 

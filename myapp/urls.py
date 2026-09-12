@@ -12,6 +12,8 @@ from .views.post import PostViewSet
 from .views import UserAvatarUploadUrlView, UserAvatarView
 from .views import PostImageUploadUrlView
 from .views.auth import AdminLoginView, RegisterView, GoogleAuthView, AccountApplicationView,AccountApplicationAdminViewSet
+from .views.auth import AccountApplicationSendCodeView
+from .views.auth import AccountApplicationVerifyCodeView
 '''
 GET http://localhost:8000/tags/
 POST http://localhost:8000/tags/
@@ -47,4 +49,13 @@ urlpatterns = [
     path("auth/register/", RegisterView.as_view(), name="register"),
     path("auth/google/", GoogleAuthView.as_view(), name="google-auth"),
     path("auth/applications/", AccountApplicationView.as_view(), name="account-application"),
+    path(
+    "auth/applications/send-code/",
+    AccountApplicationSendCodeView.as_view(),
+    name="account-application-send-code"),
+    path(
+    "auth/applications/verify-code/",
+    AccountApplicationVerifyCodeView.as_view(),
+    name="account-application-verify-code",
+),
 ]
