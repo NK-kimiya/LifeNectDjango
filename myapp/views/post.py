@@ -35,6 +35,32 @@ class PostViewSet(BaseModelViewSet):
     pagination_class = PostPagination
     queryset = Post.objects.all().order_by("-created_at")
 
+    @action(detail=True, methods=["post"], url_path="like")#投稿ごとの追加APIを作る指定
+    def like(self, request, pk=None):
+        post = self.get_object()#URLの投稿IDに対応する投稿を取得
+
+        if post.parent_post_id is not None:#この投稿が返信投稿かどうかを確認
+            return Response(
+                {"detail": "親投稿にのみいいねできます。"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if post.liked_users.filter(id=request.user.id).exists():#現在ログイン中のユーザーが、すでにこの投稿にいいねしているか確認
+            post.liked_users.remove(request.user)
+            is_liked = False
+        else:
+            post.liked_users.add(request.user)
+            is_liked = True
+
+        return Response(
+            {
+                "id": str(post.id),
+                "is_liked": is_liked,
+                "like_count": post.liked_users.count(),
+            },
+            status=status.HTTP_200_OK,
+        )
+
     
     @action(detail=True, methods=["get"], url_path="replies")
     def replies(self, request, pk=None):
@@ -60,7 +86,10 @@ class PostViewSet(BaseModelViewSet):
         queryset = (
             Post.objects
             .filter(parent_post__isnull=True)
-            .annotate(comment_count=Count("replies"))
+            .annotate(
+                comment_count=Count("replies", distinct=True),
+                like_count=Count("liked_users", distinct=True),
+            )
             .order_by("-created_at")
         )
 
@@ -79,7 +108,7 @@ class PostViewSet(BaseModelViewSet):
         return queryset.distinct()
 
     def get_permissions(self):
-        if self.action == "create":
+        if self.action in ["create", "like"]:
             return [IsAuthenticated()]
 
         return [IsAdminOrReadOnly()]

@@ -182,6 +182,13 @@ class PostWriteSerializer(serializers.ModelSerializer):
 
 
 class PostReadSerializer(serializers.ModelSerializer):
+    like_count = serializers.IntegerField(read_only=True)
+    is_liked = serializers.SerializerMethodField()#get_フィールド名のメソッドを探し結果を入れる
+    def get_is_liked(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:#リクエストがない、またはログインしていない場合
+            return False
+        return obj.liked_users.filter(id=request.user.id).exists()#対象の投稿に、ログイン中のユーザーがいいね済みか
     user = PostUserSerializer(read_only=True)
     tags = TagSerializer(many=True, read_only=True)
     comment_count = serializers.IntegerField(read_only=True)
@@ -201,6 +208,8 @@ class PostReadSerializer(serializers.ModelSerializer):
             "comment_count",
             "created_at",
             "updated_at",
+            "like_count",
+            "is_liked",
         ]
         read_only_fields = ["id", "user", "created_at", "updated_at"]
 

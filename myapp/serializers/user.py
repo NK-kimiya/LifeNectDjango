@@ -22,6 +22,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "provider",
             "avatar_content_type",
             "avatar_url",
+            "profile_text",
         )
         read_only_fields = (
             "id",
@@ -36,6 +37,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
             return generate_presigned_read_url(obj.avatar_key)
         except CloudflareR2Error:
             return None
+
+    def validate_profile_text(self, value):
+        if len(value) > 500:
+            raise serializers.ValidationError("プロフィール文は1000文字以内で入力してください。")
+        return value
 
 class UserAvatarUpdateSerializer(serializers.Serializer):
     avatar_key = serializers.CharField(max_length=500)

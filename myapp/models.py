@@ -39,6 +39,7 @@ class User(AbstractUser):
     username = None
     email = models.EmailField(unique=True)
     nickname = models.CharField(max_length=50)
+    profile_text = models.TextField(blank=True, default="")
     role = models.CharField(
         max_length=20,
         choices=Role.choices,
@@ -68,6 +69,11 @@ class UploadedFile(models.Model):
         return self.file.url if self.file else "No file"
 
 class Post(models.Model):
+    liked_users = models.ManyToManyField(
+    User,
+    related_name="liked_posts",
+    blank=True,
+    )
     id = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,

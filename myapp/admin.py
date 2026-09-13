@@ -14,6 +14,8 @@ class UploadAdmin(admin.ModelAdmin):
     
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
+    def like_count(self, obj):
+        return obj.liked_users.count()
     list_display = (
         "id",
         "title",
@@ -22,6 +24,7 @@ class PostAdmin(admin.ModelAdmin):
         "updated_at",
         "display_tags",
         "is_visible",
+        "like_count",
     )
 
     def display_tags(self, obj):
