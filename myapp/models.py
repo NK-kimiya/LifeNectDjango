@@ -32,6 +32,11 @@ class User(AbstractUser):
         ADMIN = "admin", "管理者"
         USER = "user", "ユーザー"
 
+    class AccountStatus(models.TextChoices):
+        ACTIVE = "active", "利用中"
+        SUSPENDED = "suspended", "凍結中"
+        BANNED = "banned", "永久停止"
+
     avatar_key = models.CharField(max_length=500, blank=True, null=True)
     avatar_content_type = models.CharField(max_length=100, blank=True, null=True)
     provider = models.CharField(max_length=20, default="email")
@@ -44,6 +49,11 @@ class User(AbstractUser):
         max_length=20,
         choices=Role.choices,
         default=Role.USER,
+    )
+    account_status = models.CharField(
+        max_length=20,
+        choices=AccountStatus.choices,
+        default=AccountStatus.ACTIVE,
     )
 
     USERNAME_FIELD = "email"

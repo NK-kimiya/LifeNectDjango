@@ -35,6 +35,45 @@ class PostViewSet(BaseModelViewSet):
     pagination_class = PostPagination
     queryset = Post.objects.all().order_by("-created_at")
 
+    @action(detail=False, methods=["get"], url_path="my-posts")
+    def my_posts(self, request):
+        queryset = (
+            Post.objects
+            .filter(user=request.user, parent_post__isnull=True)
+            .annotate(
+                comment_count=Count("replies", distinct=True),
+                like_count=Count("liked_users", distinct=True),
+            )
+            .order_by("-created_at")
+        )
+
+        serializer = PostReadSerializer(
+            queryset,
+            many=True,
+            context={"request": request},
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+    @action(detail=False, methods=["get"], url_path="liked")
+    def liked_posts(self, request):
+        queryset = (
+            Post.objects
+            .filter(liked_users=request.user, parent_post__isnull=True)
+            .annotate(
+                comment_count=Count("replies", distinct=True),
+                like_count=Count("liked_users", distinct=True),
+            )
+            .order_by("-created_at")
+        )
+
+        serializer = PostReadSerializer(
+            queryset,
+            many=True,
+            context={"request": request},
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=["post"], url_path="like")#投稿ごとの追加APIを作る指定
     def like(self, request, pk=None):
         post = self.get_object()#URLの投稿IDに対応する投稿を取得
@@ -108,7 +147,7 @@ class PostViewSet(BaseModelViewSet):
         return queryset.distinct()
 
     def get_permissions(self):
-        if self.action in ["create", "like"]:
+        if self.action in ["create", "like", "my_posts", "liked_posts"]:
             return [IsAuthenticated()]
 
         return [IsAdminOrReadOnly()]
