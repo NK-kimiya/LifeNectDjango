@@ -14,7 +14,7 @@ from rest_framework.filters import SearchFilter
 from rest_framework.permissions import AllowAny
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from myapp.models import Post
-from myapp.permissions import IsAdminOrReadOnly
+from myapp.permissions import IsAdminOrReadOnly,IsActiveAccount
 from myapp.views.base import BaseModelViewSet
 from django.shortcuts import get_object_or_404
 from myapp.serializers.post import (
@@ -148,7 +148,16 @@ class PostViewSet(BaseModelViewSet):
 
     def get_permissions(self):
         if self.action in ["create", "like", "my_posts", "liked_posts"]:
-            return [IsAuthenticated()]
+            return [IsAuthenticated(), IsActiveAccount()]
+
+        if self.action in [
+            "update",
+            "partial_update",
+            "destroy",
+        ]:
+            return [IsAuthenticated(),IsAdminOrReadOnly()]
+
+
 
         return [IsAdminOrReadOnly()]
 

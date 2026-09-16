@@ -2,6 +2,12 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from myapp.models import AccountApplication,AccountApplicationVerification
+from rest_framework.exceptions import AuthenticationFailed
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.db.models import Count
+from myapp.models import Post
+from myapp.serializers.post import PostReadSerializer
+
 from myapp.services.cloudflare_r2 import (
     CloudflareR2Error,
     generate_presigned_read_url,
@@ -170,3 +176,93 @@ class AccountApplicationVerifyCodeSerializer(serializers.Serializer):
         if not value.isdigit():
             raise serializers.ValidationError("認証コードは数字6桁で入力してください。")
         return value
+
+
+#ログイン時のJWTトークン発行処理をカスタマイズするSerializer
+class LoginSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        #親クラスのログイン認証処理を実行
+        #メールアドレス・パスワードが正しければ、JWTトークンが dataに入る
+        #認証されたユーザーは self.user に
+        data = super().validate(attrs)
+
+        #suspended や banned の場合はログインを拒否
+        if self.user.account_status != User.AccountStatus.ACTIVE:
+            raise AuthenticationFailed(
+                "このアカウントは現在利用できません。",
+                code="account_suspended",
+            )
+
+        #ログイン成功時のレスポンスに、JWTトークンだけでなくユーザー情報も追加
+        data["id"] = self.user.id
+        data["email"] = self.user.email
+        data["nickname"] = self.user.nickname
+
+        return data
+
+
+class AdminUserSerializer(serializers.ModelSerializer):
+    avatar_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "email",
+            "nickname",
+            "avatar_url",
+            "account_status",
+        )
+
+    def get_avatar_url(self, obj):
+        try:
+            return generate_presigned_read_url(obj.avatar_key)
+        except CloudflareR2Error:
+            return None
+
+class AdminUserDetailSerializer(serializers.ModelSerializer):
+    avatar_url = serializers.SerializerMethodField()
+    posts = serializers.SerializerMethodField()
+    post_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "email",
+            "nickname",
+            "role",
+            "provider",
+            "account_status",
+            "is_active",
+            "is_staff",
+            "is_superuser",
+            "avatar_url",
+            "avatar_content_type",
+            "profile_text",
+            "date_joined",
+            "last_login",
+            "post_count",
+            "posts",
+        )
+
+    def get_avatar_url(self, obj):
+        try:
+            return generate_presigned_read_url(obj.avatar_key)
+        except CloudflareR2Error:
+            return None
+
+    def get_post_count(self, obj):
+        return obj.posts.count()
+
+    def get_posts(self, obj):
+        posts = (
+            Post.objects
+            .filter(user=obj, parent_post__isnull=True)
+            .annotate(
+                comment_count=Count("replies", distinct=True),
+                like_count=Count("liked_users", distinct=True),
+            )
+            .order_by("-created_at")
+        )
+        return PostReadSerializer(posts, many=True, context=self.context).data

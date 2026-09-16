@@ -25,6 +25,8 @@ from myapp.services.resend_email import (
     ResendEmailError,
     send_application_verification_code,
 )
+from rest_framework_simplejwt.views import TokenObtainPairView
+from myapp.serializers.user import LoginSerializer,AdminUserSerializer,AdminUserDetailSerializer
 
 
 User = get_user_model()
@@ -33,6 +35,8 @@ class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
 
     def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         email = request.data.get("email")
 
         approved = AccountApplication.objects.filter(
@@ -45,8 +49,7 @@ class RegisterView(generics.CreateAPIView):
                 {"detail": "このメールアドレスはまだ承認されていません。"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+
         user = serializer.save()
 
         response_serializer = RegisterResponseSerializer(user)
@@ -146,6 +149,11 @@ class GoogleAuthView(APIView):
                 created = True
 
         #自分のアプリ用のJWTを発行
+        if user.account_status != User.AccountStatus.ACTIVE:
+            return Response(
+                {"detail": "このアカウントは現在凍結されています。"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         refresh = RefreshToken.for_user(user)
 
         return Response(
@@ -338,4 +346,21 @@ class AccountApplicationVerifyCodeView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+class LoginView(TokenObtainPairView):
+    serializer_class = LoginSerializer
+
+class AdminUserViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = User.objects.all().order_by("-id")
+    permission_classes = [IsAdminUserRole]
+    http_method_names = ["get", "head", "options"]
+
+    def get_serializer_class(self):
+        #特定の1ユーザーの詳細取得APIが呼ばれた場合
+        if self.action == "retrieve":
+            return AdminUserDetailSerializer
+        #それ以外の場合
+        return AdminUserSerializer
+    # GET /api/admin/users/       一覧
+    # GET /api/admin/users/{id}/  詳細
 

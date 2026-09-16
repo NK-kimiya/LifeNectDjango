@@ -2,7 +2,8 @@
 from django.conf import settings
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
+from myapp.permissions import IsActiveAccount
 from myapp.models import Post
 from openai import OpenAI
 from openai import AuthenticationError, RateLimitError, APIError
@@ -111,8 +112,7 @@ class RagAnswer(APIView):
                 "suicide_detected": False,
                 "risk_level": "low"
             }
-    authentication_classes = [] 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsActiveAccount]
     
     #安全対策のためのキーワードの導入
     SUICIDE_HIGH_RISK_KEYWORDS = [

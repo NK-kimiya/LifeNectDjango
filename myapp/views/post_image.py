@@ -2,7 +2,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
+from myapp.permissions import IsActiveAccount
 from myapp.services.cloudflare_r2 import (
     CloudflareR2Error,
     generate_post_image_upload_url,
@@ -10,7 +10,7 @@ from myapp.services.cloudflare_r2 import (
 
 
 class PostImageUploadUrlView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsActiveAccount]
 
     def post(self, request):
         content_type = request.data.get("content_type")

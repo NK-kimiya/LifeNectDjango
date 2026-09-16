@@ -1,5 +1,6 @@
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from myapp.permissions import IsActiveAccount
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -13,7 +14,7 @@ from myapp.services.cloudflare_r2 import (
 
 
 class UserAvatarUploadUrlView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsActiveAccount]
 
     def post(self, request):
         content_type = request.data.get("content_type")
@@ -44,8 +45,8 @@ class UserAvatarUploadUrlView(APIView):
 
 
 class UserAvatarView(APIView):
-    permission_classes = [IsAuthenticated]
-
+    permission_classes = [IsAuthenticated, IsActiveAccount]
+    
     def patch(self, request):
         old_avatar_key = request.user.avatar_key
 

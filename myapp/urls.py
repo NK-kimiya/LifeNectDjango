@@ -13,7 +13,8 @@ from .views import UserAvatarUploadUrlView, UserAvatarView
 from .views import PostImageUploadUrlView
 from .views.auth import AdminLoginView, RegisterView, GoogleAuthView, AccountApplicationView,AccountApplicationAdminViewSet
 from .views.auth import AccountApplicationSendCodeView
-from .views.auth import AccountApplicationVerifyCodeView
+from .views.auth import AccountApplicationVerifyCodeView,LoginView
+from .views.auth import AdminUserViewSet
 '''
 GET http://localhost:8000/tags/
 POST http://localhost:8000/tags/
@@ -34,6 +35,11 @@ router.register(
     AccountApplicationAdminViewSet,
     basename="admin-account-applications",
 )
+router.register(
+    r"admin/users",
+    AdminUserViewSet,
+    basename="admin-users",
+)
 
 
 urlpatterns = [
@@ -44,7 +50,7 @@ urlpatterns = [
     path("rag-answer/", RagAnswer.as_view(), name="similar-articles"), 
     path("", include(router.urls)),
     path("health/", health),
-    path("auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("auth/login/", LoginView.as_view(), name="token_obtain_pair"),
     path("auth/admin/login/", AdminLoginView.as_view(), name="admin-login"),
     path("auth/register/", RegisterView.as_view(), name="register"),
     path("auth/google/", GoogleAuthView.as_view(), name="google-auth"),
