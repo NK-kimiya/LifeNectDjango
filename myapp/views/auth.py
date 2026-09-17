@@ -24,6 +24,7 @@ from myapp.serializers.user import AccountApplicationVerifyCodeSerializer
 from myapp.services.resend_email import (
     ResendEmailError,
     send_application_verification_code,
+    send_application_result_email,
 )
 from rest_framework_simplejwt.views import TokenObtainPairView
 from myapp.serializers.user import LoginSerializer,AdminUserSerializer,AdminUserDetailSerializer
@@ -234,6 +235,12 @@ class AccountApplicationAdminViewSet(viewsets.ModelViewSet):
         application.reviewed_at = timezone.now()
         application.save(update_fields=["status", "reviewed_at"])#status と reviewed_at だけを DB に保存
 
+        application.save(update_fields=["status", "reviewed_at"])
+        try:
+            send_application_result_email(application)
+        except ResendEmailError:
+            pass
+
         serializer = self.get_serializer(application)#更新後の申請データを JSON に変換する準備
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -243,6 +250,11 @@ class AccountApplicationAdminViewSet(viewsets.ModelViewSet):
         application.status = AccountApplication.Status.REJECTED
         application.reviewed_at = timezone.now()
         application.save(update_fields=["status", "reviewed_at"])
+        application.save(update_fields=["status", "reviewed_at"])
+        try:
+            send_application_result_email(application)
+        except ResendEmailError:
+            pass
 
         serializer = self.get_serializer(application)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -353,7 +365,7 @@ class LoginView(TokenObtainPairView):
 class AdminUserViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = User.objects.all().order_by("-id")
     permission_classes = [IsAdminUserRole]
-    http_method_names = ["get", "head", "options"]
+    http_method_names = ["get", "patch", "head", "options"]
 
     def get_serializer_class(self):
         #特定の1ユーザーの詳細取得APIが呼ばれた場合
@@ -363,4 +375,28 @@ class AdminUserViewSet(viewsets.ReadOnlyModelViewSet):
         return AdminUserSerializer
     # GET /api/admin/users/       一覧
     # GET /api/admin/users/{id}/  詳細
+    @action(detail=True, methods=["patch"], url_path="account-status")
+    def update_account_status(self, request, pk=None):
+        user = self.get_object()
+        account_status = request.data.get("account_status")
+
+        allowed_statuses = [
+            User.AccountStatus.ACTIVE,
+            User.AccountStatus.SUSPENDED,
+            User.AccountStatus.BANNED,
+        ]
+
+        if account_status not in allowed_statuses:
+            return Response(
+                {"detail": "Invalid account_status."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.account_status = account_status
+        user.save(update_fields=["account_status"])
+
+        serializer = AdminUserSerializer(
+            user,
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)
 

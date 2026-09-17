@@ -1,20 +1,29 @@
 from rest_framework import permissions
 
 class IsAdminOrReadOnly(permissions.BasePermission):
-    message = "このアカウントは現在凍結中です。"
-    def has_permission(self, request, view):#ログイン済みユーザーの場合
-        if request.user and request.user.is_authenticated:#アカウント状態が activeでない場合
-            if (
-                getattr(request.user, "account_status", None)
-                != request.user.AccountStatus.ACTIVE
-            ):
-                return False
-        if request.method in permissions.SAFE_METHODS:  # GET, HEAD, OPTIONS
+    message = "ログインが必要です。"
+
+    def has_permission(self, request, view):
+        # 未ログインなら GET も含めてすべて拒否
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        # 凍結中・停止中なら拒否
+        if (
+            getattr(request.user, "account_status", None)
+            != request.user.AccountStatus.ACTIVE
+        ):
+            self.message = "このアカウントは現在凍結中です。"
+            return False
+
+        # GET, HEAD, OPTIONS はログイン済みなら許可
+        if request.method in permissions.SAFE_METHODS:
             return True
-        return (#POST, PUT, PATCH, DELETE は、ログイン済みかつ管理者だけ許可
-            request.user
-            and request.user.is_authenticated
-            and (request.user.is_staff or getattr(request.user, "role", None) == "admin")
+
+        # POST, PUT, PATCH, DELETE は管理者だけ許可
+        return (
+            request.user.is_staff
+            or getattr(request.user, "role", None) == "admin"
         )
 
 class IsAdminUserRole(permissions.BasePermission):

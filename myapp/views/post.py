@@ -108,7 +108,9 @@ class PostViewSet(BaseModelViewSet):
         queryset = (
             Post.objects
             .filter(parent_post=parent_post)
-            .annotate(comment_count=Count("replies", distinct=True))
+            .annotate(
+                 comment_count=Count("replies", distinct=True),
+            )
             .order_by("created_at")
         )
 
@@ -119,7 +121,8 @@ class PostViewSet(BaseModelViewSet):
             return (
                 Post.objects
                 .all()
-                .annotate(comment_count=Count("replies", distinct=True))
+                .annotate(comment_count=Count("replies", distinct=True),
+                          like_count=Count("liked_users", distinct=True),)
                 .order_by("-created_at")
             )
         queryset = (
@@ -159,7 +162,7 @@ class PostViewSet(BaseModelViewSet):
 
 
 
-        return [IsAdminOrReadOnly()]
+        return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):#postリクエスト時
         comment = request.data.get("comment", "")#リクエストデータから、commentを取得、存在しない場合は空
