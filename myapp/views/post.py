@@ -233,19 +233,8 @@ class PostViewSet(BaseModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()#削除対象のオブジェクトを取得
-        post_id = instance.id#取得した投稿オブジェクトのidを取り出す
+       
         image_key = instance.image_key
-
-        try:
-            pc = Pinecone(api_key=settings.PINECONE_API_KEY)#Pineconeクライアントを作成
-            index = pc.Index("my-index")#my-indexを取得
-            index.delete(filter={"post_id": str(post_id)})#inecone 内のデータを削除
-        except Exception:
-            return Response(
-                {"detail": "削除処理中にエラーが発生しました。"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
         self.perform_destroy(instance)
 
         if image_key:

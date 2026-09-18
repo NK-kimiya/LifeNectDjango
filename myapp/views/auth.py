@@ -25,6 +25,8 @@ from myapp.services.resend_email import (
     ResendEmailError,
     send_application_verification_code,
     send_application_result_email,
+    send_account_created_email,
+    send_account_status_email,
 )
 from rest_framework_simplejwt.views import TokenObtainPairView
 from myapp.serializers.user import LoginSerializer,AdminUserSerializer,AdminUserDetailSerializer
@@ -52,6 +54,10 @@ class RegisterView(generics.CreateAPIView):
             )
 
         user = serializer.save()
+        try:
+            send_account_created_email(user)
+        except ResendEmailError:
+            pass
 
         response_serializer = RegisterResponseSerializer(user)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
@@ -148,6 +154,11 @@ class GoogleAuthView(APIView):
                     google_sub=google_sub,
                 )
                 created = True
+                if created:
+                    try:
+                        send_account_created_email(user)
+                    except ResendEmailError:
+                        pass
 
         #自分のアプリ用のJWTを発行
         if user.account_status != User.AccountStatus.ACTIVE:
@@ -391,9 +402,23 @@ class AdminUserViewSet(viewsets.ReadOnlyModelViewSet):
                 {"detail": "Invalid account_status."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
+        previous_status = user.account_status
         user.account_status = account_status
         user.save(update_fields=["account_status"])
+
+        if previous_status != account_status and account_status in [
+            User.AccountStatus.ACTIVE,
+            User.AccountStatus.SUSPENDED,
+            User.AccountStatus.BANNED,
+        ]:
+            try:
+                send_account_status_email(
+                    user=user,
+                    previous_status=previous_status,
+                    new_status=account_status,
+                )
+            except ResendEmailError:
+                pass
 
         serializer = AdminUserSerializer(
             user,

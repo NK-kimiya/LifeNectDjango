@@ -70,3 +70,81 @@ def send_application_result_email(application) -> None:
         })
     except ResendError as error:
         raise ResendEmailError(str(error)) from error
+
+def send_account_created_email(user) -> None:
+    if not settings.RESEND_API_KEY:
+        raise ResendEmailError("RESEND_API_KEY is not configured.")
+
+    if not settings.RESEND_FROM_EMAIL:
+        raise ResendEmailError("RESEND_FROM_EMAIL is not configured.")
+
+    template_id = settings.RESEND_ACCOUNT_CREATED_TEMPLATE_ID
+    if not template_id:
+        raise ResendEmailError("RESEND_ACCOUNT_CREATED_TEMPLATE_ID is not configured.")
+
+    resend.api_key = settings.RESEND_API_KEY
+
+    try:
+        resend.Emails.send({
+            "from": settings.RESEND_FROM_EMAIL,
+            "to": [user.email],
+            "template": {
+                "id": template_id,
+                "variables": {
+                    "NICKNAME": user.nickname,
+                    "EMAIL": user.email,
+                },
+            },
+        })
+    except ResendError as error:
+        raise ResendEmailError(str(error)) from error
+
+def send_account_status_email(user, previous_status: str, new_status: str) -> None:
+    if not settings.RESEND_API_KEY:
+        raise ResendEmailError("RESEND_API_KEY is not configured.")
+
+    if not settings.RESEND_FROM_EMAIL:
+        raise ResendEmailError("RESEND_FROM_EMAIL is not configured.")
+
+    template_id = settings.RESEND_ACCOUNT_STATUS_TEMPLATE_ID
+    if not template_id:
+        raise ResendEmailError("RESEND_ACCOUNT_STATUS_TEMPLATE_ID is not configured.")
+
+    status_labels = {
+        "active": "通常利用",
+        "suspended": "凍結",
+        "banned": "利用停止",
+    }
+
+    if new_status == "active":
+        subject_label = "凍結解除"
+        message = "アカウントの凍結が解除されました。通常どおりご利用いただけます。"
+    elif new_status == "suspended":
+        subject_label = "凍結"
+        message = "アカウントが凍結されました。現在、一部またはすべての機能をご利用いただけません。"
+    elif new_status == "banned":
+        subject_label = "利用停止"
+        message = "アカウントが利用停止になりました。"
+    else:
+        return
+
+    resend.api_key = settings.RESEND_API_KEY
+
+    try:
+        resend.Emails.send({
+            "from": settings.RESEND_FROM_EMAIL,
+            "to": [user.email],
+            "template": {
+                "id": template_id,
+                "variables": {
+                    "NICKNAME": user.nickname,
+                    "EMAIL": user.email,
+                    "STATUS_LABEL": status_labels.get(new_status, new_status),
+                    "PREVIOUS_STATUS_LABEL": status_labels.get(previous_status, previous_status),
+                    "SUBJECT_LABEL": subject_label,
+                    "MESSAGE": message,
+                },
+            },
+        })
+    except ResendError as error:
+        raise ResendEmailError(str(error)) from error
