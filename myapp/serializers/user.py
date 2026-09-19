@@ -7,7 +7,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.db.models import Count
 from myapp.models import Post
 from myapp.serializers.post import PostReadSerializer
-
+from django.contrib.auth.password_validation import validate_password
 from myapp.services.cloudflare_r2 import (
     CloudflareR2Error,
     generate_presigned_read_url,
@@ -266,3 +266,24 @@ class AdminUserDetailSerializer(serializers.ModelSerializer):
             .order_by("-created_at")
         )
         return PostReadSerializer(posts, many=True, context=self.context).data
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value):#入力されたメールアドレスを整形
+        return value.lower().strip()
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    token = serializers.CharField()
+    password = serializers.CharField(write_only=True)
+    password_confirm = serializers.CharField(write_only=True)
+
+    #新しいパスワードと確認用パスワードが一致しているか確認
+    def validate(self, attrs):
+        if attrs["password"] != attrs["password_confirm"]:
+            raise serializers.ValidationError({
+                "password_confirm": "パスワードが一致しません。"
+            })
+
+        validate_password(attrs["password"])
+        return attrs

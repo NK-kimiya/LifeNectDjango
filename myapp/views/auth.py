@@ -30,7 +30,14 @@ from myapp.services.resend_email import (
 )
 from rest_framework_simplejwt.views import TokenObtainPairView
 from myapp.serializers.user import LoginSerializer,AdminUserSerializer,AdminUserDetailSerializer
-
+import hashlib
+import secrets
+from myapp.models import PasswordResetToken
+from myapp.serializers.user import (
+    PasswordResetRequestSerializer,
+    PasswordResetConfirmSerializer,
+)
+from myapp.services.resend_email import send_password_reset_email
 
 User = get_user_model()
 class RegisterView(generics.CreateAPIView):
@@ -425,3 +432,78 @@ class AdminUserViewSet(viewsets.ReadOnlyModelViewSet):
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        #リクエストで送られてきた email をチェック
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        #チェック済みのメールアドレスを取り出し、そのメールのユーザーをDBから取得
+        email = serializer.validated_data["email"]
+        user = User.objects.filter(email__iexact=email).first()
+
+        #ユーザーが存在する場合
+        if user:
+            #安全なランダムトークンを作成
+            raw_token = secrets.token_urlsafe(48)
+            #トークンをハッシュ化して保存
+            token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+            #ユーザー、ハッシュ化したトークン、有効期限をDBに保存
+            PasswordResetToken.objects.create(
+                user=user,
+                token_hash=token_hash,
+                expires_at=PasswordResetToken.create_expiry_time(),
+            )
+            #フロントエンド側のパスワード再設定画面URL
+            reset_url = f"{settings.FRONTEND_URL}/auth/reset-password?token={raw_token}"
+
+            try:
+                #ユーザーにパスワード再設定メールを送信
+                send_password_reset_email(user, reset_url)
+            except ResendEmailError:
+                pass
+
+        return Response(
+            {"detail": "パスワード再設定メールを送信しました。"},
+            status=status.HTTP_200_OK,
+        )
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        #送られてきた token、password、password_confirm をチェック
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        #リクエストで受け取ったトークンをハッシュ化
+        raw_token = serializer.validated_data["token"]
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        #条件に合う再設定トークンを取得
+        reset_token = (
+            PasswordResetToken.objects#PasswordResetToken テーブルに対して、データベース検索
+            .select_related("user")#PasswordResetToken に紐づく user も一緒に取得
+            .filter(token_hash=token_hash, is_used=False)#条件に合うトークンだけを取得
+            .first()#条件に合う最初の1件
+        )
+        #トークンが見つからない、または有効期限切れならエラー
+        if not reset_token or reset_token.is_expired():
+            return Response(
+                {"detail": "再設定リンクが無効、または有効期限切れです。"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        #対象ユーザーのパスワードを新しいものに変更
+        user = reset_token.user
+        user.set_password(serializer.validated_data["password"])
+        user.save(update_fields=["password"])
+
+        #使い終わったトークンを「使用済み」に設定
+        reset_token.is_used = True
+        reset_token.save(update_fields=["is_used"])
+
+        return Response(
+            {"detail": "パスワードを再設定しました。"},
+            status=status.HTTP_200_OK,
+        )

@@ -148,3 +148,32 @@ def send_account_status_email(user, previous_status: str, new_status: str) -> No
         })
     except ResendError as error:
         raise ResendEmailError(str(error)) from error
+
+def send_password_reset_email(user, reset_url: str) -> None:
+    if not settings.RESEND_API_KEY:
+        raise ResendEmailError("RESEND_API_KEY is not configured.")
+
+    if not settings.RESEND_FROM_EMAIL:
+        raise ResendEmailError("RESEND_FROM_EMAIL is not configured.")
+
+    template_id = settings.RESEND_PASSWORD_RESET_TEMPLATE_ID
+    if not template_id:
+        raise ResendEmailError("RESEND_PASSWORD_RESET_TEMPLATE_ID is not configured.")
+
+    resend.api_key = settings.RESEND_API_KEY
+
+    try:
+        resend.Emails.send({
+            "from": settings.RESEND_FROM_EMAIL,
+            "to": [user.email],
+            "template": {
+                "id": template_id,
+                "variables": {
+                    "NICKNAME": user.nickname,
+                    "RESET_URL": reset_url,
+                    "EXPIRES_MINUTES": "30",
+                },
+            },
+        })
+    except ResendError as error:
+        raise ResendEmailError(str(error)) from error

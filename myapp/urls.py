@@ -15,6 +15,7 @@ from .views.auth import AdminLoginView, RegisterView, GoogleAuthView, AccountApp
 from .views.auth import AccountApplicationSendCodeView
 from .views.auth import AccountApplicationVerifyCodeView,LoginView
 from .views.auth import AdminUserViewSet
+from .views.auth import PasswordResetRequestView, PasswordResetConfirmView
 '''
 GET http://localhost:8000/tags/
 POST http://localhost:8000/tags/
@@ -63,5 +64,15 @@ urlpatterns = [
     "auth/applications/verify-code/",
     AccountApplicationVerifyCodeView.as_view(),
     name="account-application-verify-code",
+),
+path(
+    "auth/password-reset/request/",
+    PasswordResetRequestView.as_view(),
+    name="password-reset-request",
+),
+path(
+    "auth/password-reset/confirm/",
+    PasswordResetConfirmView.as_view(),
+    name="password-reset-confirm",
 ),
 ]
