@@ -25,19 +25,19 @@ class MeView(APIView):
 
         return Response(serializer.data)
 
-def delete(self, request):
-    user = request.user
-    avatar_key = user.avatar_key
+    def delete(self, request):
+        user = request.user
+        avatar_key = user.avatar_key
 
-    user.delete()
+        user.delete()
 
-    if avatar_key:
-        try:
-            delete_object(avatar_key)
-        except CloudflareR2Error:
-            pass
+        if avatar_key:
+            try:
+                delete_object(avatar_key)
+            except CloudflareR2Error:
+                pass
 
-    return Response(
-        {"detail": "アカウントを削除しました。"},
-        status=status.HTTP_200_OK,
-    )
+        return Response(
+            {"detail": "アカウントを削除しました。"},
+            status=status.HTTP_200_OK,
+        )
