@@ -84,7 +84,7 @@ MIDDLEWARE = [
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "https://life-nect-react.vercel.app",
+    "https://lifenectreact.onrender.com/",
 ]
 
 REST_FRAMEWORK = {
